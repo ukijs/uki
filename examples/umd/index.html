@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="uki.umd.min.js" type="application/javascript"></script>
+  </head>
+  <body>
+    <div id="myView"></div>
+    <script type="application/javascript">
+      function CustomView () {
+        uki.View.apply(this, arguments);
+      }
+      CustomView.prototype = Object.create(uki.View.prototype);
+      CustomView.prototype.constructor = CustomView;
+
+      CustomView.prototype.setup = function (d3el) {
+        d3el.append('p');
+      }
+      CustomView.prototype.draw = function (d3el) {
+        d3el.select('p').text('Hello, world!');
+      }
+
+      var myView = new CustomView();
+      myView.render(d3.select('#myView'));
+    </script>
+  </body>
+</html>
