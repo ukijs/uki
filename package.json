@@ -4,6 +4,7 @@
   "description": "Minimal, d3-based Model-View library",
   "main": "build/uki.umd.min.js",
   "module": "build/uki.es.js",
+  "esnext": "build/uki.es.js",
   "jsnext:main": "build/uki.es.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
