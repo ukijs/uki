@@ -33,7 +33,7 @@ class Model extends AbstractClass {
     let args = Array.prototype.slice.call(arguments, 1);
     if (this.eventHandlers[eventName]) {
       this.eventHandlers[eventName].forEach(callback => {
-        window.setTimeout(() => {   // Add timeout to prevent blocking
+        window.setTimeout(() => { // Add timeout to prevent blocking
           callback.apply(this, args);
         }, 0);
       });

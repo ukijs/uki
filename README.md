@@ -8,6 +8,8 @@ I don't claim this is better than any of them... but its code is short and it do
 Installation and Usage
 ======================
 
+TODO: browsers now support `<script type="module"></script>`!!!!
+
 If you need wide browser support, or you're new to setting up web projects, I recommend using the ES5 library: [UMD / Classic HTML](https://github.com/alex-r-bigelow/uki/blob/master/examples/umd)
 
 If you're more familiar with Javascript build chain hell, you can use cleaner ES6 syntax following this [webpack](https://github.com/alex-r-bigelow/uki/blob/master/examples/webpack) example.
