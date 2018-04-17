@@ -1,3 +1,4 @@
+/* globals d3 */
 import { View } from './uki.esm.js';
 
 class CustomView extends View {
@@ -8,4 +9,6 @@ class CustomView extends View {
     this.d3el.text('Hello, world!');
   }
 }
-export default new CustomView();
+
+const myView = new CustomView(d3.select('#myView'));
+myView.render();
