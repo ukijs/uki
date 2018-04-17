@@ -12,6 +12,7 @@ class Model extends AbstractClass {
   constructor() {
     super();
     this.eventHandlers = {};
+    this.stickyTriggers = {};
   }
   on(eventName, callback, allowDuplicateListeners) {
     if (!this.eventHandlers[eventName]) {
@@ -36,9 +37,7 @@ class Model extends AbstractClass {
       }
     }
   }
-  trigger() {
-    let eventName = arguments[0];
-    let args = Array.prototype.slice.call(arguments, 1);
+  trigger(eventName, ...args) {
     if (this.eventHandlers[eventName]) {
       this.eventHandlers[eventName].forEach(callback => {
         window.setTimeout(() => {
@@ -47,6 +46,16 @@ class Model extends AbstractClass {
         }, 0);
       });
     }
+  }
+  stickyTrigger(eventName, argObj, delay = 10) {
+    this.stickyTriggers[eventName] = this.stickyTriggers[eventName] || { argObj: {} };
+    this.stickyTriggers[eventName].argObj = Object.assign(this.stickyTriggers.argObj, argObj);
+    window.clearTimeout(this.stickyTriggers.timeout);
+    this.stickyTriggers.timeout = window.setTimeout(() => {
+      let argObj = this.stickyTriggers[eventName].argObj;
+      delete this.stickyTriggers[eventName];
+      this.trigger(eventName, argObj);
+    }, delay);
   }
 }
 
