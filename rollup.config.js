@@ -22,7 +22,7 @@ let builds = [
   {
     input: 'src/module.js',
     output: {
-      name: 'mure',
+      name: 'uki',
       file: pkg.browser,
       format: 'umd',
       globals: { 'd3': 'd3' }

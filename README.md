@@ -7,24 +7,63 @@ I don't claim this is better than any of them... but its code is short and it do
 
 Installation and Usage
 ======================
+To use in the browser, you should import it [from a module](https://github.com/alex-r-bigelow/uki/blob/master/examples/basic/script.js).
 
-TODO: browsers now support `<script type="module"></script>`!!!!
+If you're playing with Javascript build chain hell:
 
-If you need wide browser support, or you're new to setting up web projects, I recommend using the ES5 library: [UMD / Classic HTML](https://github.com/alex-r-bigelow/uki/blob/master/examples/umd)
+```bash
+npm install --save uki
+```
+and
+```javascript
+import { Model, View } from 'uki';
+```
+should just work.
 
-If you're more familiar with Javascript build chain hell, you can use cleaner ES6 syntax following this [webpack](https://github.com/alex-r-bigelow/uki/blob/master/examples/webpack) example.
-Note that the `main` field in `package.json` points to the Babel-ified ES5 version, and `bundle` / `jsnext:main` point to a rolled up ES6 file without any Babel transpiling.
+Note that, currently, there is no non-ES6 support. Let me know if you're actually using this and need it, and I can try to cook up a build.
+
+Running examples
+================
+To see the example in action (currently just have `basic`):
+```bash
+npm run example -- basic
+```
 
 Documentation
 =============
 
 The basic idea is you extend the `Model` and `View` classes; you can assign and listen to custom events on one, the other, or both, depending on how you roll. Or ignore events if you want to manage state differently.
 
-`View`s should implement a `setup` and `draw` function, but they shouldn't be called directly. Instead, you should call the view's `render` function. Exactly when / how you call it is up to you.
+## Models
+Models are meant to do one simple thing: enable non-blocking custom events *a la* the classic `.on('someEvent', callback)` pattern. Events are fired when you call `.trigger('someEvent', additional, payload, arguments)`;
 
-At least the first time `render(d3element)` is called, it should be passed a d3-selected DOM container as the parameter (it can be a div, span, svg, whatever). Thereafter, the parameter is optional.
+There is one extra feature, in that you can trigger events in a *sticky* fashion, i.e.:
+```javascript
+myModel.on('someEvent', paramObj => {
+  console.log(JSON.stringify(paramObj, null, 2));
+});
 
-You don't need to worry about calling render too frequently: `render` triggers a `setup` only once when the view is given a new DOM element to render to (you can give a view a new element at any point, and setup will be called again if it's actually a different element).
-`draw` is debounced, so only the last render call will trigger a draw (you can adjust the waiting period by changing the View's `debounceWait` property).
+myModel.stickyTrigger('someEvent', { param1: 'one' });
+myModel.stickyTrigger('someEvent', { param2: 'two' });
+```
+would result in a *single* callback:
+```json
+{
+  "param1": "one",
+  "param2": "two"
+}
+```
 
-For more details, read [the source code](https://github.com/alex-r-bigelow/uki/blob/master/src); it's deliberately small!
+## Views
+`View`s should implement a `setup` and `draw` function (should feel sort of familiar to you [Processing](https://processing.org/) fans), but these functions shouldn't be called directly. Instead, you should call the view's `render` function.
+
+Exactly when / how / how often you call `render` is up to you; internally, it's debounced, so you can fire it as much as you like without affecting performance.
+
+### Documentation TODOs:
+- d3 file loading via the constructor
+- talk about overriding an element's `d3el` object
+- details of constructor, `setup`, and `draw` timing
+- details about which auto-computed element bounds are available
+
+## Details
+For more details, read [the source code](https://github.com/alex-r-bigelow/uki/blob/master/src) itself; it's deliberately small!

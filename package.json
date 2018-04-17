@@ -1,12 +1,11 @@
 {
   "name": "uki",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Minimal, d3-based Model-View library",
   "module": "dist/uki.esm.js",
   "jsnext:main": "dist/uki.esm.js",
-  "browser": "dist/uki.umd.min.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "example": "bash examples/run.sh",
     "build": "rollup -c",
     "dev": "rollup -c -w"
   },
@@ -31,6 +30,7 @@
     "rollup-plugin-node-globals": "^1.1.0",
     "rollup-plugin-node-resolve": "^3.0.2",
     "rollup-plugin-uglify": "^3.0.0",
+    "serve": "^6.5.5",
     "uglify-es": "^3.3.9"
   },
   "dependencies": {},
