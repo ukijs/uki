@@ -2,50 +2,61 @@
 import Model from '../Model/index.js';
 
 class View extends Model {
-  constructor (finishedLoading = Promise.resolve()) {
+  constructor (d3el, resources = {}) {
     super();
-    this.d3el = null;
-    this.dirty = false;
+    this.requireProperties(['setup', 'draw']);
+    this.d3el = d3el;
+    this.dirty = true;
     this.drawTimeout = null;
     this.debounceWait = 100;
-    this.requireProperties(['setup', 'draw']);
-    (async () => {
-      await finishedLoading;
-      this.render();
-    })();
+    this.readyToRender = false;
+    this.loadResources(resources);
   }
-  hasRenderedTo (d3el) {
-    // Determine whether this is the first time we've rendered
-    // inside this DOM element; return false if this is the first time
-    // Also store the element as the last one that we rendered to
-
-    let needsFreshRender = this.dirty;
-    if (d3el) {
-      if (this.d3el) {
-        // only need to do a full render if the last element wasn't the same as this one
-        needsFreshRender = this.dirty || d3el.node() !== this.d3el.node();
-      } else {
-        // we didn't have an element before
-        needsFreshRender = true;
-      }
-      this.d3el = d3el;
-    } else {
-      if (!this.d3el) {
-        // we weren't given a new element to render to, so use the last one
-        throw new Error('Called render() without an element to render to (and no prior element has been specified)');
-      } else {
-        d3el = this.d3el;
-      }
+  loadStylesheet (path) {
+    let style = document.createElement('link');
+    style.rel = 'stylesheet';
+    style.type = 'text/css';
+    style.media = 'screen';
+    style.href = path;
+    document.getElementsByTagName('head')[0].appendChild(style);
+    return style;
+  }
+  async loadResources (paths) {
+    this.resources = {};
+    if (paths.style) {
+      // Load stylesheets immediately
+      this.resources.style = this.loadStylesheet(paths.style);
+      delete paths.style;
     }
-    this.dirty = false;
-    return !needsFreshRender;
+    // load all d3-fetchable resources in parallel
+    try {
+      await Promise.all(Object.keys(paths).reduce((agg, key) => {
+        if (d3[key]) {
+          agg.push((async () => {
+            this.resources[key] = await d3[key](paths[key]);
+          })());
+        } else {
+          throw new Error('d3 has no function for fetching resource of type ' + key);
+        }
+        return agg;
+      }, []));
+      this.readyToRender = true;
+      this.render();
+    } catch (err) { throw err; }
   }
-  render (d3el = this.d3el || d3.select('body')) {
-    if (!this.hasRenderedTo(d3el)) {
+  render (d3el = this.d3el) {
+    let needsFreshRender = this.dirty || d3el.node() !== this.d3el.node();
+    this.d3el = d3el;
+    if (!this.readyToRender) {
+      // Don't execute any render calls until the promise in the constructor
+      // has been resolved
+      return;
+    }
+    if (needsFreshRender) {
       // Call setup immediately
       this.updateContainerCharacteristics(d3el);
       this.setup(d3el);
-      this.d3el = d3el;
+      this.dirty = false;
     }
     // Debounce the actual draw call
     clearTimeout(this.drawTimeout);
