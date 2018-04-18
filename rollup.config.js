@@ -21,5 +21,14 @@ export default [
     },
     external: allExternals,
     plugins: commonPlugins
+  },
+  {
+    input: 'src/module.js',
+    output: {
+      file: pkg.main,
+      format: 'cjs'
+    },
+    external: allExternals,
+    plugins: commonPlugins
   }
 ];

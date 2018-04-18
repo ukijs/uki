@@ -7,20 +7,33 @@ I don't claim this is better than any of them... but its code is short and it do
 
 Installation and Usage
 ======================
-To use in the browser, you should import it [from a module](https://github.com/alex-r-bigelow/uki/blob/master/examples/basic/script.js).
 
-If you're playing with Javascript build chain hell:
-
-```bash
-npm install --save uki
+## In the browser
+Import it from a module (note that, currently, there is no non-ES6 support):
+```html
+<script type="module" src="myScript.js"></script>
 ```
-and
+`myScript.js`:
 ```javascript
 import { Model, View } from 'uki';
 ```
-should just work.
 
-Note that, currently, there is no non-ES6 support. Let me know if you're actually using this and need it, and I can try to cook up a build.
+## In Javascript build chain hell:
+```bash
+npm install --save uki
+```
+```javascript
+import { Model, View } from 'uki';
+```
+
+## In Node.js
+(Of course, it doesn't make a ton of sense to use uki outside of the browser, but I realize it can still be important for testing purposes, etc)
+```bash
+npm install --save uki
+```
+```javascript
+const uki = require('uki');
+```
 
 Running examples
 ================
