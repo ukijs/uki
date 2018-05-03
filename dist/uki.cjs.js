@@ -53,7 +53,7 @@ class Model extends AbstractClass {
   }
   stickyTrigger(eventName, argObj, delay = 10) {
     this.stickyTriggers[eventName] = this.stickyTriggers[eventName] || { argObj: {} };
-    this.stickyTriggers[eventName].argObj = Object.assign(this.stickyTriggers.argObj, argObj);
+    Object.assign(this.stickyTriggers[eventName].argObj, argObj);
     window.clearTimeout(this.stickyTriggers.timeout);
     this.stickyTriggers.timeout = window.setTimeout(() => {
       let argObj = this.stickyTriggers[eventName].argObj;
@@ -66,7 +66,7 @@ class Model extends AbstractClass {
 /* globals d3 */
 
 class View extends Model {
-  constructor(d3el, resources = {}) {
+  constructor(d3el = null, resources = {}) {
     super();
     this.requireProperties(['setup', 'draw']);
     this.d3el = d3el;
@@ -104,18 +104,19 @@ class View extends Model {
         }
         return agg;
       }, []));
-      this.readyToRender = true;
-      this.render();
     } catch (err) {
       throw err;
     }
+    this.readyToRender = true;
+    this.render();
   }
   render(d3el = this.d3el) {
     let needsFreshRender = this.dirty || d3el.node() !== this.d3el.node();
     this.d3el = d3el;
-    if (!this.readyToRender) {
+    if (!this.readyToRender || !this.d3el) {
       // Don't execute any render calls until the promise in the constructor
-      // has been resolved
+      // has been resolved, or until we've actually been given a d3 element
+      // to work with
       return;
     }
     if (needsFreshRender) {
