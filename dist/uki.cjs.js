@@ -54,8 +54,8 @@ class Model extends AbstractClass {
   stickyTrigger(eventName, argObj, delay = 10) {
     this.stickyTriggers[eventName] = this.stickyTriggers[eventName] || { argObj: {} };
     Object.assign(this.stickyTriggers[eventName].argObj, argObj);
-    window.clearTimeout(this.stickyTriggers.timeout);
-    this.stickyTriggers.timeout = window.setTimeout(() => {
+    clearTimeout(this.stickyTriggers.timeout);
+    this.stickyTriggers.timeout = setTimeout(() => {
       let argObj = this.stickyTriggers[eventName].argObj;
       delete this.stickyTriggers[eventName];
       this.trigger(eventName, argObj);
