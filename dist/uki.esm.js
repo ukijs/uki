@@ -1,9 +1,19 @@
+var queueAsync = (func => {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      resolve(func());
+    });
+  });
+});
+
 class AbstractClass {
   requireProperties(properties) {
-    properties.forEach(m => {
-      if (this[m] === undefined) {
-        throw new TypeError(m + ' is undefined for class ' + this.constructor.name);
-      }
+    queueAsync(() => {
+      properties.forEach(m => {
+        if (this[m] === undefined) {
+          throw new TypeError(m + ' is undefined for class ' + this.constructor.name);
+        }
+      });
     });
   }
 }
@@ -163,4 +173,4 @@ class View extends Model {
   }
 }
 
-export { AbstractClass, Model, View };
+export { AbstractClass, Model, View, queueAsync };

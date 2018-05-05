@@ -2,12 +2,22 @@
 
 Object.defineProperty(exports, '__esModule', { value: true });
 
+var queueAsync = (func => {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      resolve(func());
+    });
+  });
+});
+
 class AbstractClass {
   requireProperties(properties) {
-    properties.forEach(m => {
-      if (this[m] === undefined) {
-        throw new TypeError(m + ' is undefined for class ' + this.constructor.name);
-      }
+    queueAsync(() => {
+      properties.forEach(m => {
+        if (this[m] === undefined) {
+          throw new TypeError(m + ' is undefined for class ' + this.constructor.name);
+        }
+      });
     });
   }
 }
@@ -170,3 +180,4 @@ class View extends Model {
 exports.AbstractClass = AbstractClass;
 exports.Model = Model;
 exports.View = View;
+exports.queueAsync = queueAsync;
