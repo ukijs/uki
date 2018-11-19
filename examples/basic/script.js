@@ -1,5 +1,5 @@
 /* globals d3 */
-import { View } from './uki.esm.js';
+import { View } from '../uki.esm.js';
 
 class CustomView extends View {
   setup () {
@@ -10,5 +10,5 @@ class CustomView extends View {
   }
 }
 
-const myView = new CustomView(d3.select('#myView'));
-myView.render();
+window.testView = new CustomView(d3.select('#myView'));
+window.testView.render();
