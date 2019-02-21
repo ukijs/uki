@@ -7,7 +7,7 @@ class Model extends AbstractClass {
     this._stickyTriggers = {};
   }
   on (eventName, callback) {
-    let [event, namespace] = eventName.split(':');
+    let [event, namespace] = eventName.split('.');
     this._eventHandlers[event] = this._eventHandlers[event] ||
       { '': [] };
     if (!namespace) {
@@ -17,7 +17,7 @@ class Model extends AbstractClass {
     }
   }
   off (eventName, callback) {
-    let [event, namespace] = eventName.split(':');
+    let [event, namespace] = eventName.split('.');
     if (this._eventHandlers[event]) {
       if (!namespace) {
         if (!callback) {

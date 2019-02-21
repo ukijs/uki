@@ -2,22 +2,23 @@ uki
 ===
 
 A minimal, d3-based Model-View library library that I use in my projects.
-I rolled this together after lots of frustration with existing MVC frameworks that really constrain what you do and force you to read a ton of documentation---all to just help you do something simple.
+I rolled this together after lots of frustration with existing MVC frameworks that really constrain what you do and force you to read a ton of documentation---all to just help you do some simple things.
 I don't claim this is better than any of them... but its code is short and it does so little, that it gets out of my way.
 
 # Installation and Usage
 
 ## In the browser
-Import it from a module (note that, currently, there is no non-ES6 support):
+Import it as a module (currently, there is no non-ES6 support):
 ```html
+<script src="https://d3js.org/d3.v5.min.js"></script>
 <script type="module" src="myScript.js"></script>
 ```
 `myScript.js`:
 ```javascript
-import { Model, View } from 'uki';
+import { Model, View } from 'uki.esm.js';
 ```
 
-## In Javascript build chain hell:
+## In Javascript bundle tool hell:
 ```bash
 npm install --save uki
 ```
@@ -35,9 +36,10 @@ const uki = require('uki');
 ```
 
 # Running examples
-To see the example in action (currently just have `basic`):
+To see examples in action:
 ```bash
 npm run example -- basic
+npm run example -- resources
 ```
 
 # Documentation
@@ -45,9 +47,28 @@ npm run example -- basic
 The basic idea is you extend the `Model` and `View` classes; you can assign and listen to custom events on one, the other, or both, depending on how you roll. Or ignore events if you want to manage state differently.
 
 ## Models
-Models are meant to do one simple thing: enable non-blocking custom events *a la* the classic `.on('someEvent', callback)` pattern. Events are fired when you call `.trigger('someEvent', additional, payload, arguments)`;
+Models are meant to do one simple thing: enable non-blocking custom events *a la* the classic `.on('someEvent', callback)` pattern. Events are fired when you call `.trigger('someEvent', additional, payload, arguments)`
 
-There is one extra feature, in that you can trigger events in a *sticky* fashion, i.e.:
+### Namespaced events
+`uki` supports namespaced events; i.e.:
+```javascript
+myModel.on('someEvent.context1', () => { console.log('do one thing'); });
+myModel.on('someEvent.context2', () => { console.log('do another thing'); });
+
+myModel.trigger('someEvent');
+/*
+do one thing
+do another thing
+*/
+myModel.off('someEvent.context1');
+myModel.trigger('someEvent');
+/*
+do another thing
+*/
+```
+
+### Sticky events
+You can trigger events in a *sticky* way that combines triggers into fewer callbacks, while merging all parameters in a single object, i.e.:
 ```javascript
 myModel.on('someEvent', paramObj => {
   console.log(JSON.stringify(paramObj, null, 2));
@@ -55,13 +76,13 @@ myModel.on('someEvent', paramObj => {
 
 myModel.stickyTrigger('someEvent', { param1: 'one' });
 myModel.stickyTrigger('someEvent', { param2: 'two' });
-```
-would result in a *single* callback:
-```json
+myModel.stickyTrigger('someEvent', { param1: 'override one' });
+/*
 {
-  "param1": "one",
+  "param1": "override one",
   "param2": "two"
 }
+*/
 ```
 
 ## Views
@@ -69,15 +90,17 @@ would result in a *single* callback:
 
 Exactly when / how / how often you call `render` is up to you; internally, it's debounced, so you can fire it as much as you like without affecting performance.
 
+### Other magic I'm considering adding:
+- My GoldenLayout integrations?
+- Introspectable?
+- CSS hacks for re-coloring icons?
+
 ### Documentation TODOs:
-- d3 file loading via the constructor
+- loading resources via the constructor
 - talk about overriding an element's `d3el` object
 - details of constructor, `setup`, and `draw` timing
 - details about which auto-computed element bounds are available
 - `queueAsync`
-
-## Details
-For more details, read [the source code](https://github.com/alex-r-bigelow/uki/blob/master/src) itself; it's deliberately small!
 
 # Releasing a new version
 A list of reminders to make sure I don't forget any steps:

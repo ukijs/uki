@@ -6,7 +6,8 @@ class CustomView extends View {
     this.d3el.append('p');
   }
   draw () {
-    this.d3el.text('Hello, world!');
+    this.d3el.select('p')
+      .text('Hello, world!');
   }
 }
 
