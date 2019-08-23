@@ -73,7 +73,7 @@ import { Model } from '../lib/uki.esm.js';
 class Graph extends Model {
   constructor () {
     super([
-      { type: 'json', url: 'Models/Graph/miserables.json' }
+      { type: 'json', url: '/models/Graph/miserables.json' }
     ]);
     this.highlightedNode = null;
   }
@@ -90,8 +90,8 @@ import { View } from '../lib/uki.esm.js';
 class NodeLinkView extends View {
   constructor (graph) {
     super(null, [
-      { type: 'text', url: 'views/NodeLinkView/template.html' },
-      { type: 'css', url: 'views/NodeLinkView/style.css' }
+      { type: 'text', url: '/views/NodeLinkView/template.html' },
+      { type: 'css', url: '/views/NodeLinkView/style.css' }
     ]);
     this.graph = graph;
     this.graph.on('highlight', () => { this.render(); });
