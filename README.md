@@ -131,7 +131,7 @@ class NodeLinkView extends View {
 I rolled this together after lots of frustration with existing MVC frameworks
 (Angular and Backbone, I'm looking at you) that really constrain what you do,
 force you to read a ton of documentation, and make you drink their particular
-philosophical kool-aid---only to help you do some simple things.
+philosophical kool-aid—only to help you do some simple things.
 
 I don't claim this is better than anything else out there. But if any of these
 things sound appealing, maybe it's worth trying out:
