@@ -1,114 +1,149 @@
-uki
-===
+[[https://github.com/alex-r-bigelow/uki/blob/master/docs/teaser.svg|alt=uki.js]]
 
-A minimal, d3-based Model-View library library that I use in my projects.
-I rolled this together after lots of frustration with existing MVC frameworks that really constrain what you do and force you to read a ton of documentation---all to just help you do some simple things.
-I don't claim this is better than any of them... but its code is short and it does so little, that it gets out of my way.
+A minimal, d3-based Model-View framework.
 
-# Installation and Usage
+# What is this?
+[bl.ocks](https://bl.ocks.org) are awesome and simple, but building more
+complex / linked systems gets hairy.
 
-## In the browser
-Import it as a module (currently, there is no non-ES6 support):
-```html
-<script src="https://d3js.org/d3.v5.min.js"></script>
-<script type="module" src="myScript.js"></script>
-```
-`myScript.js`:
-```javascript
-import { Model, View } from 'uki.esm.js';
-```
-
-## In Javascript bundle tool hell:
-```bash
-npm install --save uki
-```
-```javascript
-import { Model, View } from 'uki';
-```
-
-## In Node.js
-(Of course, it doesn't make a ton of sense to use uki outside of the browser, but I realize it can still be important for testing purposes, etc)
-```bash
-npm install --save uki
-```
-```javascript
-const uki = require('uki');
-```
-
-# Running examples
-To see examples in action:
-```bash
-npm run example -- basic
-npm run example -- resources
-```
+`uki` is a framework to act as glue between bl.ock-esque views.
 
 # Documentation
+The basic idea is that you extend the `Model` and `View` classes with your own:
+- [Models](./docs/models.md)
+- [Views](./docs/views.md)
+- [Installation and Usage](./docs/installation.md)
+- [Examples](./docs/examples.md)
 
-The basic idea is you extend the `Model` and `View` classes; you can assign and listen to custom events on one, the other, or both, depending on how you roll. Or ignore events if you want to manage state differently.
+# What does this look like?
+Ideally, you should be able to create visualizations with this kind of directory
+structure (or, as paths are open-ended, you can use whatever structure you
+want):
 
-## Models
-Models are meant to do one simple thing: enable non-blocking custom events *a la* the classic `.on('someEvent', callback)` pattern. Events are fired when you call `.trigger('someEvent', additional, payload, arguments)`
-
-### Namespaced events
-`uki` supports namespaced events; i.e.:
-```javascript
-myModel.on('someEvent.context1', () => { console.log('do one thing'); });
-myModel.on('someEvent.context2', () => { console.log('do another thing'); });
-
-myModel.trigger('someEvent');
-/*
-do one thing
-do another thing
-*/
-myModel.off('someEvent.context1');
-myModel.trigger('someEvent');
-/*
-do another thing
-*/
+```
+index.html
+controller.js
+lib/
+  uki.esm.js
+  d3.min.js
+models/
+  Graph/
+    Graph.js
+    miserables.json
+views/
+  NodeLinkView/
+    NodeLinkView.js
+    template.html
+    style.css
 ```
 
-### Sticky events
-You can trigger events in a *sticky* way that combines triggers into fewer callbacks, while merging all parameters in a single object, i.e.:
-```javascript
-myModel.on('someEvent', paramObj => {
-  console.log(JSON.stringify(paramObj, null, 2));
-});
+**index.html**
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="lib/d3.min.js"></script>
+    <script src="controller.js" type="module"></script>
+  </head>
+  <body>
+    <div id="nodeLinkView"></div>
+  </body>
+</html>
+```
 
-myModel.stickyTrigger('someEvent', { param1: 'one' });
-myModel.stickyTrigger('someEvent', { param2: 'two' });
-myModel.stickyTrigger('someEvent', { param1: 'override one' });
-/*
-{
-  "param1": "override one",
-  "param2": "two"
+**controller.js**
+```javascript
+/* globals d3 */
+import Graph from './models/Graph/Graph.js';
+import NodeLinkView from './views/NodeLinkView/NodeLinkView.js';
+
+const miserables = new Graph();
+const nodeLinkView = new NodeLinkView(miserables);
+window.onload = () => {
+  nodeLinkView.render(d3.select('#nodeLinkView'))
+};
+window.onresize = () => {
+  nodeLinkView.render();
+};
+```
+
+**Graph.js**
+```javascript
+import { Model } from '../lib/uki.esm.js';
+class Graph extends Model {
+  constructor () {
+    super([
+      { type: 'json', url: 'Models/Graph/miserables.json' }
+    ]);
+    this.highlightedNode = null;
+  }
+  highlightNode (node) {
+    this.highlightedNode = node;
+    this.trigger('highlight');
+  }
 }
-*/
 ```
 
-## Views
-`View`s should implement a `setup` and `draw` function (should feel sort of familiar to you [Processing](https://processing.org/) fans), but these functions shouldn't be called directly. Instead, you should call the view's `render` function.
+**NodeLinkView.js**
+```javascript
+import { View } from '../lib/uki.esm.js';
+class NodeLinkView extends View {
+  constructor (graph) {
+    super(null, [
+      { type: 'text', url: 'views/NodeLinkView/template.html' },
+      { type: 'css', url: 'views/NodeLinkView/style.css' }
+    ]);
+    this.graph = graph;
+    this.graph.on('highlight', () => { this.render(); });
+  }
+  setup () {
+    // The contents of template.html are put into the #nodeLinkView div exactly
+    // once
+    this.d3el.html(this.resources[0]);
+  }
+  draw () {
+    // d3.js force-directed graph drawing would go here; a fully-implemented
+    // example coming soon!
+  }
+}
+```
 
-Exactly when / how / how often you call `render` is up to you; internally, it's debounced, so you can fire it as much as you like without affecting performance.
+**template.html**
+```html
+<svg>
+  <g id="linkLayer"></g>
+  <g id="nodeLayer"></g>
+</svg>
+```
 
-### Other magic I'm considering adding:
-- My GoldenLayout integrations?
-- Introspectable?
-- CSS hacks for re-coloring icons?
+**style.css**
+```css
+.linkLayer path {
+  stroke-width: 1px;
+  stroke: #666666;
+}
+.nodeLayer circle {
+  fill: #333333;
+}
+```
 
-### Documentation TODOs:
-- loading resources via the constructor
-- talk about overriding an element's `d3el` object
-- details of constructor, `setup`, and `draw` timing
-- details about which auto-computed element bounds are available
-- `queueAsync`
+# Why another framework?
+I rolled this together after lots of frustration with existing MVC frameworks
+(Angular and Backbone, I'm looking at you) that really constrain what you do,
+force you to read a ton of documentation, and make you drink their particular
+philosophical kool-aid---only to help you do some simple things.
 
-# Releasing a new version
-A list of reminders to make sure I don't forget any steps:
+I don't claim this is better than anything else out there. But if any of these
+things sound appealing, maybe it's worth trying out:
 
-- Update the version in package.json
-- `npm run build`
-- `git commit -a -m "commit message"`
-- `git tag -a #.#.# -m "tag annotation"`
-- `git push --tags`
-- `npm publish`
-- (maybe optional) Edit / document the release on Github
+- Helps simplify the process of connecting different, existing views (e.g. from
+  [bl.ocks.org](https://bl.ocks.org/)) together in a linked view system
+- Simplifies some of the issues of loading / fetching non-Javascript resources
+  (e.g. CSV files, API calls, CSS stylesheets) in a way that *should* give you
+  more control over directory structures (e.g. if, like me, you like to have all
+  the JS, CSS, template HTML / SVG, and data files pertaining to a view in a
+  common directory)
+- Simplifies some of the setup / timing issues common to working with d3 (e.g.
+  setup vs update functions, making sure things render only after needed
+  resources have been loaded, etc)
+- Support for custom, d3-style, namespaced, non-blocking events

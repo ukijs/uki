@@ -11,5 +11,7 @@ class CustomView extends View {
   }
 }
 
-window.testView = new CustomView(d3.select('#myView'));
-window.testView.render();
+window.testView = new CustomView();
+window.onload = () => {
+  window.testView.render(d3.select('#myView'));
+};

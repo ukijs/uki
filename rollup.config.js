@@ -4,8 +4,8 @@ import pkg from './package.json';
 // Derive some of the configuration from package.json
 const peerDependencies = Object.keys(pkg.peerDependencies);
 const allExternals = peerDependencies.concat(
-  Object.keys(pkg.dependencies)).concat(
-  Object.keys(pkg.devDependencies));
+  Object.keys(pkg.dependencies || {})).concat(
+  Object.keys(pkg.devDependencies || {}));
 const commonPlugins = [
   babel({ exclude: ['node_modules/**'] }) // let us use fancy new things like async in our code
 ];

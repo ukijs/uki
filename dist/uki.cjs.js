@@ -2,32 +2,83 @@
 
 Object.defineProperty(exports, '__esModule', { value: true });
 
-var queueAsync = (func => {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      resolve(func());
-    });
-  });
-});
+/* globals d3, less */
+class Model {
+  constructor(resources) {
+    this._eventHandlers = {};
+    this._stickyTriggers = {};
+    this._hasLESSresources = false;
+    this.ready = new Promise(async (resolve, reject) => {
+      if (resources) {
+        await this._loadResources(resources);
+      }
 
-class AbstractClass {
-  requireProperties(properties) {
-    queueAsync(() => {
-      properties.forEach(m => {
-        if (this[m] === undefined) {
-          throw new TypeError(m + ' is undefined for class ' + this.constructor.name);
-        }
-      });
+      if (this._hasLESSresources) {
+        await less.pageLoadFinished;
+      }
+
+      this.trigger('load');
+      resolve();
     });
   }
 
-}
+  _loadCSS(url) {
+    if (Model.LOADED_STYLES[url]) {
+      // Don't bother loading redundant style files
+      return;
+    }
 
-class Model extends AbstractClass {
-  constructor() {
-    super();
-    this._eventHandlers = {};
-    this._stickyTriggers = {};
+    const style = document.createElement('link');
+    style.rel = 'stylesheet';
+    style.type = 'text/css';
+    style.media = 'screen';
+    style.href = url;
+    document.getElementsByTagName('head')[0].appendChild(style);
+    Model.LOADED_STYLES[url] = true;
+    return style;
+  }
+
+  async _loadLESS(url) {
+    if (Model.LOADED_STYLES[url]) {
+      // Don't bother loading redundant style files
+      return;
+    }
+
+    if (!less) {
+      // We assume that less is globally available (like d3)
+      console.warn(`LESS is not in the global scope; omitting ${url}`);
+      return;
+    }
+
+    this._hasLESSresources = true; // TODO: maybe do magic to make LESS variables accessible under this.resources?
+
+    const result = await less.render(`@import '${url}';`);
+    const style = document.createElement('style');
+    style.type = 'text/css';
+    style.innerHTML = result.css;
+    document.getElementsByTagName('head')[0].appendChild(style);
+    Model.LOADED_STYLES[url] = true;
+    return style;
+  }
+
+  async _loadResources(paths = []) {
+    const resourcePromises = [];
+
+    for (const spec of paths) {
+      if (spec.type === 'css') {
+        // Load pure css directly
+        resourcePromises.push(this._loadCSS(spec.url));
+      } else if (spec.type === 'less') {
+        // We assume less is available globally
+        resourcePromises.push((await this._loadLESS(spec.url)));
+      } else if (d3[spec.type]) {
+        resourcePromises.push(d3[spec.type](spec.url));
+      } else {
+        throw new Error(`Can't load resource ${spec.url} of type ${spec.type}`);
+      }
+    }
+
+    this.resources = await Promise.all(resourcePromises);
   }
 
   on(eventName, callback) {
@@ -64,9 +115,11 @@ class Model extends AbstractClass {
   }
 
   trigger(event, ...args) {
+    // TODO: maybe promise-ify this, so that anyone triggering an event has a
+    // way of knowing that everyone has finished responding to it?
     const handleCallback = callback => {
       window.setTimeout(() => {
-        // Add timeout to prevent blocking
+        // Timeout to prevent blocking
         callback.apply(this, args);
       }, 0);
     };
@@ -97,92 +150,65 @@ class Model extends AbstractClass {
 
 }
 
-/* globals d3 */
+Model.LOADED_STYLES = {};
+
+/**
+ * View classes
+ */
 
 class View extends Model {
   constructor(d3el = null, resources) {
-    super();
-    this.requireProperties(['setup', 'draw']);
+    super(resources);
     this.d3el = d3el;
     this.dirty = true;
-    this.drawTimeout = null;
+    this._drawTimeout = null;
+    this._renderResolves = [];
     this.debounceWait = 100;
-
-    if (resources) {
-      this.readyToRender = false;
-      this.loadResources(resources);
-    } else {
-      this.readyToRender = true;
-    }
-  }
-
-  loadCSS(url) {
-    const style = document.createElement('link');
-    style.rel = 'stylesheet';
-    style.type = 'text/css';
-    style.media = 'screen';
-    style.href = url;
-    document.getElementsByTagName('head')[0].appendChild(style);
-    return style;
-  }
-
-  async loadLESS(url) {
-    // We assume that less is globally available
-    const result = await less.render(`@import '${url}';`); // eslint-disable-line no-undef
-
-    const style = document.createElement('style');
-    style.type = 'text/css';
-    style.innerHTML = result.css;
-    document.getElementsByTagName('head')[0].appendChild(style);
-    return style;
-  }
-
-  async loadResources(paths = []) {
-    const resourcePromises = [];
-
-    for (const spec of paths) {
-      if (spec.type === 'css') {
-        // Load pure css directly
-        resourcePromises.push(this.loadCSS(spec.url));
-      } else if (spec.type === 'less') {
-        // We assume less is available globally
-        resourcePromises.push((await this.loadLESS(spec.url)));
-      } else if (d3[spec.type]) {
-        resourcePromises.push(d3[spec.type](spec.url));
-      } else {
-        throw new Error(`Can't load resource ${spec.url} of type ${spec.type}`);
-      }
-    }
-
-    this.resources = await Promise.all(resourcePromises);
-    this.readyToRender = true;
     this.render();
   }
 
-  render(d3el = this.d3el) {
-    let needsFreshRender = this.dirty || d3el.node() !== this.d3el.node();
+  async render(d3el = this.d3el) {
     this.d3el = d3el;
 
-    if (!this.readyToRender || !this.d3el) {
+    if (!this.d3el) {
       // Don't execute any render calls until all resources are loaded,
       // and we've actually been given a d3 element to work with
-      return;
+      return new Promise((resolve, reject) => {
+        this._renderResolves.push(resolve);
+      });
     }
 
-    if (needsFreshRender) {
-      // Call setup immediately
+    await this.ready;
+
+    if (this.dirty || d3el.node() !== this.d3el.node()) {
+      // Need a fresh render; call setup immediately
       this.updateContainerCharacteristics(d3el);
       this.setup(d3el);
       this.dirty = false;
-    } // Debounce the actual draw call
+    } // Debounce the actual draw call, and return promises that will resolve when
+    // draw() actually finishes
 
 
-    clearTimeout(this.drawTimeout);
-    this.drawTimeout = setTimeout(() => {
-      this.drawTimeout = null;
-      this.draw(d3el);
-    }, this.debounceWait);
+    return new Promise((resolve, reject) => {
+      this._renderResolves.push(resolve);
+
+      clearTimeout(this._drawTimeout);
+      this._drawTimeout = setTimeout(() => {
+        this._drawTimeout = null;
+        this.draw(d3el);
+
+        for (const r of this._renderResolves) {
+          r();
+        }
+
+        this._renderResolves = [];
+      }, this.debounceWait);
+    });
   }
+
+  setup(d3el) {}
+
+  draw(d3el) {}
 
   updateContainerCharacteristics(d3el) {
     if (d3el !== null) {
@@ -216,7 +242,5 @@ class View extends Model {
 
 }
 
-exports.AbstractClass = AbstractClass;
 exports.Model = Model;
 exports.View = View;
-exports.queueAsync = queueAsync;
