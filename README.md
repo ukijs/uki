@@ -1,4 +1,4 @@
-[[https://github.com/alex-r-bigelow/uki/blob/master/docs/teaser.svg|alt=uki.js]]
+![uki.js](https://github.com/alex-r-bigelow/uki/blob/master/docs/teaser.svg)
 
 A minimal, d3-based Model-View framework.
 
