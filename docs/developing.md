@@ -20,7 +20,8 @@ A list of reminders to make sure I don't forget any steps:
 - Update the version in package.json
 - `npm run build`
 - Run each example (TODO: automated testing?)
-- `git commit -a -m "commit message"`
+- `git add -A`
+- `git commit -m "commit message"`
 - `git tag -a #.#.# -m "tag annotation"`
 - `git push --tags`
 - `npm publish`

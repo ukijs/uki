@@ -26,7 +26,8 @@ class View extends Model {
     if (this.dirty || d3el.node() !== this.d3el.node()) {
       // Need a fresh render; call setup immediately
       this.updateContainerCharacteristics(d3el);
-      this.setup(d3el);
+      await this.setup(d3el);
+      this.trigger('setupFinished');
       this.dirty = false;
     }
     // Debounce the actual draw call, and return promises that will resolve when
@@ -34,9 +35,9 @@ class View extends Model {
     return new Promise((resolve, reject) => {
       this._renderResolves.push(resolve);
       clearTimeout(this._drawTimeout);
-      this._drawTimeout = setTimeout(() => {
+      this._drawTimeout = setTimeout(async () => {
         this._drawTimeout = null;
-        this.draw(d3el);
+        await this.draw(d3el);
         for (const r of this._renderResolves) {
           r();
         }
