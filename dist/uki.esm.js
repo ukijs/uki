@@ -176,12 +176,14 @@ class View extends Model {
 
     await this.ready;
 
-    if ((this.dirty || d3el.node() !== this.d3el.node()) && this._renderResolves.length === 0) {
+    if (this.dirty || d3el.node() !== this.d3el.node()) {
       // Need a fresh render; call setup immediately
       this.updateContainerCharacteristics(d3el);
-      await this.setup(d3el);
-      this.trigger('setupFinished');
+      this._setupPromise = this.setup(d3el);
+      await this._setupPromise;
+      delete this._setupPromise;
       this.dirty = false;
+      this.trigger('setupFinished');
     } // Debounce the actual draw call, and return promises that will resolve when
     // draw() actually finishes
 
@@ -192,6 +194,11 @@ class View extends Model {
       clearTimeout(this._drawTimeout);
       this._drawTimeout = setTimeout(async () => {
         this._drawTimeout = null;
+
+        if (this._setupPromise) {
+          await this._setupPromise;
+        }
+
         await this.draw(d3el);
 
         for (const r of this._renderResolves) {
