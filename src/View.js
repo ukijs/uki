@@ -23,7 +23,8 @@ class View extends Model {
       });
     }
     await this.ready;
-    if (this.dirty || d3el.node() !== this.d3el.node()) {
+    if ((this.dirty || d3el.node() !== this.d3el.node()) &&
+        this._renderResolves.length === 0) {
       // Need a fresh render; call setup immediately
       this.updateContainerCharacteristics(d3el);
       await this.setup(d3el);
