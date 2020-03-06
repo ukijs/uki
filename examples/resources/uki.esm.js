@@ -164,7 +164,10 @@ class View extends Model {
   }
 
   async render(d3el = this.d3el) {
-    this.d3el = d3el;
+    if (this.d3el !== d3el) {
+      this.d3el = d3el;
+      this.dirty = true;
+    }
 
     if (!this.d3el) {
       // Don't execute any render calls until all resources are loaded,
@@ -176,13 +179,14 @@ class View extends Model {
 
     await this.ready;
 
-    if (this.dirty || d3el.node() !== this.d3el.node()) {
+    if ((this.dirty || d3el.node() !== this.d3el.node()) && this._setupPromise === undefined) {
       // Need a fresh render; call setup immediately
+      this.d3el = d3el;
       this.updateContainerCharacteristics(d3el);
       this._setupPromise = this.setup(d3el);
+      this.dirty = false;
       await this._setupPromise;
       delete this._setupPromise;
-      this.dirty = false;
       this.trigger('setupFinished');
     } // Debounce the actual draw call, and return promises that will resolve when
     // draw() actually finishes

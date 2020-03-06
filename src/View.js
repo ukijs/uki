@@ -14,10 +14,13 @@ class View extends Model {
     this.render();
   }
   async render (d3el = this.d3el) {
+    if (this.d3el !== d3el) {
+      this.d3el = d3el;
+      this.dirty = true;
+    }
     if (!this.d3el) {
       // Don't execute any render calls until all resources are loaded,
       // and we've actually been given a d3 element to work with
-      this.d3el = d3el;
       return new Promise((resolve, reject) => {
         this._renderResolves.push(resolve);
       });
