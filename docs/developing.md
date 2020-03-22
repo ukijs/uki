@@ -6,9 +6,9 @@ Developing
 - Svg mixin that auto-updates its bounds based on CSS rules?
 - Introspectable?
 - CSS hacks for re-coloring icons?
-- Making LESS variables accessible under `this.resources`?
 - Promise-ifying `.trigger()` calls so that you can know when everyone has
   finished responding to an event?
+- Support non-absolute resource paths
 
 # Documentation TODOs:
 - implement a full force-directed example

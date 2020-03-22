@@ -61,14 +61,35 @@ class Model {
     const resourcePromises = [];
 
     for (const spec of paths) {
-      if (spec.type === 'css') {
+      if (spec instanceof Promise) {
+        // An arbitrary promise
+        resourcePromises.push(spec);
+      } else if (spec.type === 'css') {
         // Load pure css directly
         resourcePromises.push(this._loadCSS(spec.url));
       } else if (spec.type === 'less') {
         // We assume less is available globally
         resourcePromises.push((await this._loadLESS(spec.url)));
+      } else if (spec.type === 'fetch') {
+        // Raw fetch request
+        resourcePromises.push(window.fetch(spec.url, spec.init || {}));
       } else if (d3[spec.type]) {
-        resourcePromises.push(d3[spec.type](spec.url));
+        // One of D3's native types
+        const args = [];
+
+        if (spec.init) {
+          args.push(spec.init);
+        }
+
+        if (spec.row) {
+          args.push(spec.row);
+        }
+
+        if (spec.type === 'dsv') {
+          resourcePromises.push(d3[spec.type](spec.delimiter, spec.url, ...args));
+        } else {
+          resourcePromises.push(d3[spec.type](spec.url, ...args));
+        }
       } else {
         throw new Error(`Can't load resource ${spec.url} of type ${spec.type}`);
       }
