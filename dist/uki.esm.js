@@ -1,78 +1,109 @@
 /* globals d3, less */
 class Model {
-  constructor(resources) {
+  constructor(resources = []) {
     this._eventHandlers = {};
     this._stickyTriggers = {};
-    this._hasLESSresources = false;
     this.ready = new Promise(async (resolve, reject) => {
-      if (resources) {
-        await this._loadResources(resources);
-      }
-
-      if (this._hasLESSresources) {
-        await less.pageLoadFinished;
-      }
-
+      await this._loadResources(resources);
       this.trigger('load');
       resolve();
     });
   }
 
-  _loadCSS(url) {
-    if (Model.LOADED_STYLES[url]) {
-      // Don't bother loading redundant style files
+  _loadJS(url, extraAttrs = {}) {
+    if (document.querySelector(`script[src="${url}"]`)) {
+      // We've already added this script
       return;
     }
 
-    const style = document.createElement('link');
-    style.rel = 'stylesheet';
-    style.type = 'text/css';
-    style.media = 'screen';
-    style.href = url;
-    document.getElementsByTagName('head')[0].appendChild(style);
-    Model.LOADED_STYLES[url] = true;
-    return style;
+    const script = document.createElement('script');
+    script.type = 'application/javascript';
+
+    for (const [key, value] of Object.entries(extraAttrs)) {
+      script[key] = value;
+    }
+
+    const loadPromise = new Promise((resolve, reject) => {
+      script.onload = () => {
+        resolve(script);
+      };
+    });
+    script.src = url;
+    document.getElementsByTagName('head')[0].appendChild(script);
+    return loadPromise;
+  }
+
+  _loadCSS(url) {
+    if (document.querySelector(`link[href="${url}"]`)) {
+      // We've already added this stylesheet
+      return;
+    }
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.type = 'text/css';
+    link.media = 'screen';
+    const loadPromise = new Promise((resolve, reject) => {
+      link.onload = () => {
+        resolve(link);
+      };
+    });
+    link.href = url;
+    document.getElementsByTagName('head')[0].appendChild(link);
+    return loadPromise;
   }
 
   async _loadLESS(url) {
-    if (Model.LOADED_STYLES[url]) {
-      // Don't bother loading redundant style files
+    if (Model.LOADED_LESS[url] || document.querySelector(`link[href="${url}"]`)) {
+      // We've already added this stylesheet
       return;
-    }
+    } // TODO: maybe do magic to make LESS variables accessible under this.resources?
 
-    if (!less) {
-      // We assume that less is globally available (like d3)
-      console.warn(`LESS is not in the global scope; omitting ${url}`);
-      return;
-    }
-
-    this._hasLESSresources = true; // TODO: maybe do magic to make LESS variables accessible under this.resources?
 
     const result = await less.render(`@import '${url}';`);
     const style = document.createElement('style');
     style.type = 'text/css';
     style.innerHTML = result.css;
+    Model.LOADED_LESS[url] = true;
     document.getElementsByTagName('head')[0].appendChild(style);
-    Model.LOADED_STYLES[url] = true;
-    return style;
+    return Promise.resolve(style);
   }
 
-  async _loadResources(paths = []) {
-    const resourcePromises = [];
+  async _loadResources(specs = []) {
+    // Get d3.js if needed
+    if (!window.d3) {
+      await this._loadJS('https://cdnjs.cloudflare.com/ajax/libs/d3/5.15.1/d3.min.js', {
+        'data-log-level': '1'
+      });
+    } // Add and await LESS script if relevant
 
-    for (const spec of paths) {
+
+    const hasLESSresources = specs.find(spec => spec.type === 'less') || document.querySelector(`link[rel="stylesheet/less"]`);
+
+    if (hasLESSresources && !window.less) {
+      if (!window.less) {
+        await this._loadJS('https://cdnjs.cloudflare.com/ajax/libs/less.js/3.11.1/less.min.js');
+      }
+    }
+
+    const resourcePromises = specs.map(spec => {
+      let p;
+
       if (spec instanceof Promise) {
         // An arbitrary promise
-        resourcePromises.push(spec);
+        return spec;
       } else if (spec.type === 'css') {
         // Load pure css directly
-        resourcePromises.push(this._loadCSS(spec.url));
+        p = this._loadCSS(spec.url);
       } else if (spec.type === 'less') {
-        // We assume less is available globally
-        resourcePromises.push((await this._loadLESS(spec.url)));
+        // Convert LESS to CSS
+        p = this._loadLESS(spec.url);
       } else if (spec.type === 'fetch') {
         // Raw fetch request
-        resourcePromises.push(window.fetch(spec.url, spec.init || {}));
+        p = window.fetch(spec.url, spec.init || {});
+      } else if (spec.type === 'js') {
+        // Load a legacy JS script (i.e. something that can't be ES6-imported)
+        p = this._loadJS(spec.url);
       } else if (d3[spec.type]) {
         // One of D3's native types
         const args = [];
@@ -86,16 +117,28 @@ class Model {
         }
 
         if (spec.type === 'dsv') {
-          resourcePromises.push(d3[spec.type](spec.delimiter, spec.url, ...args));
+          p = d3[spec.type](spec.delimiter, spec.url, ...args);
         } else {
-          resourcePromises.push(d3[spec.type](spec.url, ...args));
+          p = d3[spec.type](spec.url, ...args);
         }
       } else {
         throw new Error(`Can't load resource ${spec.url} of type ${spec.type}`);
       }
-    }
 
+      if (spec.then) {
+        p.then(spec.then);
+      }
+
+      return p;
+    });
     this.resources = await Promise.all(resourcePromises);
+
+    if (hasLESSresources) {
+      // Some views / other libraries (e.g. goldenLayout) require less styles
+      // to already be loaded before they attempt to render; this ensures that
+      // LESS styles NOT requested by uki are still loaded
+      await less.pageLoadFinished;
+    }
   }
 
   on(eventName, callback) {
@@ -167,7 +210,7 @@ class Model {
 
 }
 
-Model.LOADED_STYLES = {};
+Model.LOADED_LESS = {};
 
 /**
  * View classes
