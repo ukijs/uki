@@ -18,7 +18,7 @@ class Model {
     const script = document.createElement('script');
     script.type = 'application/javascript';
     for (const [key, value] of Object.entries(extraAttrs)) {
-      script[key] = value;
+      script.setAttribute(key, value);
     }
     const loadPromise = new Promise((resolve, reject) => {
       script.onload = () => { resolve(script); };
@@ -27,7 +27,7 @@ class Model {
     document.getElementsByTagName('head')[0].appendChild(script);
     return loadPromise;
   }
-  _loadCSS (url) {
+  _loadCSS (url, extraAttrs = {}) {
     if (document.querySelector(`link[href="${url}"]`)) {
       // We've already added this stylesheet
       return;
@@ -36,6 +36,9 @@ class Model {
     link.rel = 'stylesheet';
     link.type = 'text/css';
     link.media = 'screen';
+    for (const [key, value] of Object.keys(extraAttrs)) {
+      link.setAttribute(key, value);
+    }
     const loadPromise = new Promise((resolve, reject) => {
       link.onload = () => { resolve(link); };
     });
@@ -43,7 +46,7 @@ class Model {
     document.getElementsByTagName('head')[0].appendChild(link);
     return loadPromise;
   }
-  async _loadLESS (url) {
+  async _loadLESS (url, extraAttrs = {}) {
     if (Model.LOADED_LESS[url] || document.querySelector(`link[href="${url}"]`)) {
       // We've already added this stylesheet
       return;
@@ -52,6 +55,9 @@ class Model {
     const result = await less.render(`@import '${url}';`);
     const style = document.createElement('style');
     style.type = 'text/css';
+    for (const [key, value] of Object.keys(extraAttrs)) {
+      style.setAttribute(key, value);
+    }
     style.innerHTML = result.css;
     Model.LOADED_LESS[url] = true;
     document.getElementsByTagName('head')[0].appendChild(style);
@@ -74,23 +80,27 @@ class Model {
       }
     }
 
-    const resourcePromises = specs.map(spec => {
+    this._resourceLookup = {};
+    const resourcePromises = specs.map((spec, i) => {
+      if (spec.name) {
+        this._resourceLookup[spec.name] = i;
+      }
       let p;
       if (spec instanceof Promise) {
         // An arbitrary promise
         return spec;
       } else if (spec.type === 'css') {
         // Load pure css directly
-        p = this._loadCSS(spec.url);
+        p = this._loadCSS(spec.url, spec.extraAttributes || {});
       } else if (spec.type === 'less') {
         // Convert LESS to CSS
-        p = this._loadLESS(spec.url);
+        p = this._loadLESS(spec.url, spec.extraAttributes || {});
       } else if (spec.type === 'fetch') {
         // Raw fetch request
         p = window.fetch(spec.url, spec.init || {});
       } else if (spec.type === 'js') {
         // Load a legacy JS script (i.e. something that can't be ES6-imported)
-        p = this._loadJS(spec.url);
+        p = this._loadJS(spec.url, spec.extraAttributes || {});
       } else if (d3[spec.type]) {
         // One of D3's native types
         const args = [];
@@ -117,11 +127,15 @@ class Model {
     this.resources = await Promise.all(resourcePromises);
 
     if (hasLESSresources) {
-      // Some views / other libraries (e.g. goldenLayout) require less styles
+      // Some views / other libraries (e.g. goldenLayout) require LESS styles
       // to already be loaded before they attempt to render; this ensures that
       // LESS styles NOT requested by uki are still loaded
       await less.pageLoadFinished;
     }
+  }
+  getNamedResource (name) {
+    return this._resourceLookup[name] === undefined ? null
+      : this.resources[this._resourceLookup[name]];
   }
   on (eventName, callback) {
     let [event, namespace] = eventName.split('.');
