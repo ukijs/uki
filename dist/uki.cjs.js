@@ -351,15 +351,7 @@ class View extends Model {
 /* globals gapi */
 
 class GoogleSheetModel extends Model {
-  constructor({
-    clientId,
-    apiKey,
-    spreadsheetId,
-    mode,
-    range
-  }) {
-    let resources = [];
-
+  constructor(resources = [], options) {
     if (!window.gapi) {
       resources.push({
         type: 'js',
@@ -368,22 +360,19 @@ class GoogleSheetModel extends Model {
     }
 
     super(resources);
-    this.apiKey = apiKey;
-    this.clientId = clientId;
-    this.spreadsheetId = spreadsheetId;
-    this.mode = mode || GoogleSheetModel.MODE.AUTH_READ_ONLY;
+    this.spreadsheetId = options.spreadsheetId;
+    this.mode = options.mode || GoogleSheetModel.MODE.AUTH_READ_ONLY;
 
     if (!GoogleSheetModel.MODE[this.mode]) {
       throw new Error(`Mode ${this.mode} not supported yet`);
     }
 
-    this.range = range || 'Sheet1';
+    this.range = options.range || 'Sheet1';
     this._cache = null;
     this._status = GoogleSheetModel.STATUS.PENDING;
-    this.init();
   }
 
-  async init() {
+  async setupAuth(apiKey, clientId) {
     await this.ready;
 
     if (this.mode === GoogleSheetModel.MODE.AUTH_READ_ONLY || this.mode === GoogleSheetModel.MODE.AUTH_READ_WRITE) {
@@ -393,8 +382,8 @@ class GoogleSheetModel extends Model {
         // :rage_emoji: ... can I please have the last 4 hours of my life back?
         window.setTimeout(() => {
           gapi.client.init({
-            apiKey: this.apiKey,
-            clientId: this.clientId,
+            apiKey: apiKey,
+            clientId: clientId,
             discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
             scope: this.mode === GoogleSheetModel.MODE.AUTH_READ_ONLY ? 'https://www.googleapis.com/auth/spreadsheets.readonly' : 'https://www.googleapis.com/auth/spreadsheets'
           }).then(() => {
@@ -470,10 +459,18 @@ class GoogleSheetModel extends Model {
   }
 
   signIn() {
+    if (!this.mode.startsWith('AUTH')) {
+      throw new Error(`Can't sign in to model with mode ${this.mode}`);
+    }
+
     gapi.auth2.getAuthInstance().signIn();
   }
 
   signOut() {
+    if (!this.mode.startsWith('AUTH')) {
+      throw new Error(`Can't sign out of model with mode ${this.mode}`);
+    }
+
     gapi.auth2.getAuthInstance().signOut();
   }
 

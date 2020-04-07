@@ -5,14 +5,18 @@ class CustomView extends View {
   constructor (d3el) {
     super(d3el);
 
-    this.model = new GoogleSheetModel({
-      apiKey: 'AIzaSyAGvxpHTf5dEcnvsL7_DBynOjhRyh2hmuo',
-      clientId: '785875941724-nt92f7nc2dpr8ha4uo16ls4eld9bvfed.apps.googleusercontent.com',
+    this.model = new GoogleSheetModel([], {
       // Point this to a spreadsheet that your google account has write access to:
       spreadsheetId: '15u2YOyqXpGr8krpBP55qC4gxmAwDwFfKLEgyuoIpnMM',
       mode: GoogleSheetModel.MODE.AUTH_READ_WRITE,
       range: 'Class Data!A1:E'
     });
+    // You should include your own apiKey / clientId. These should work for
+    // the demo on localhost, but you'll need your own for anything else
+    this.model.setupAuth(
+      'AIzaSyAGvxpHTf5dEcnvsL7_DBynOjhRyh2hmuo',
+      '785875941724-nt92f7nc2dpr8ha4uo16ls4eld9bvfed.apps.googleusercontent.com'
+    );
 
     this.model.on('dataUpdated', () => { this.render(); });
     this.model.on('statusChanged', () => { this.render(); });
