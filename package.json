@@ -1,13 +1,13 @@
 {
   "name": "uki",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Minimal, d3-based Model-View library",
   "module": "dist/uki.esm.js",
   "jsnext:main": "dist/uki.esm.js",
   "main": "dist/uki.cjs.js",
   "scripts": {
     "example": "bash examples/run.sh",
-    "build": "rollup -c",
+    "build": "rollup -c && ls -d examples/*/ | xargs -n 1 cp -v dist/uki.esm.js",
     "dev": "rollup -c -w"
   },
   "repository": {
