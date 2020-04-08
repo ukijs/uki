@@ -18,15 +18,12 @@ class GoogleSheetModel extends Model {
     this._cache = null;
     this._status = GoogleSheetModel.STATUS.PENDING;
   }
-  async setupAuth (apiKey, clientId) {
-    await this.ready;
-
-    if (this.mode === GoogleSheetModel.MODE.AUTH_READ_ONLY ||
-        this.mode === GoogleSheetModel.MODE.AUTH_READ_WRITE) {
-      gapi.load('client:auth2', () => {
-        // Really annoying google bug: https://github.com/google/google-api-javascript-client/issues/399
-        // means that we have to wait 10ms before actually trying to call init() or it fails silently
-        // :rage_emoji: ... can I please have the last 4 hours of my life back?
+  async _initWorkaroundPromise (apiKey, clientId) {
+    // Really annoying google bug: https://github.com/google/google-api-javascript-client/issues/399
+    // means that we have to wait 10ms before actually trying to call init() or it fails silently
+    // :rage_emoji: ... can I please have the last week of my life back?
+    if (!GoogleSheetModel._initPromise) {
+      GoogleSheetModel._initPromise = new Promise((resolve, reject) => {
         window.setTimeout(() => {
           gapi.client.init({
             apiKey: apiKey,
@@ -35,23 +32,36 @@ class GoogleSheetModel extends Model {
             scope: this.mode === GoogleSheetModel.MODE.AUTH_READ_ONLY
               ? 'https://www.googleapis.com/auth/spreadsheets.readonly'
               : 'https://www.googleapis.com/auth/spreadsheets'
-          }).then(() => {
-            const auth = gapi.auth2.getAuthInstance().isSignedIn;
-
-            // Listen for status changes
-            auth.listen(signedIn => {
-              this.status = signedIn
-                ? GoogleSheetModel.STATUS.SIGNED_IN : GoogleSheetModel.STATUS.SIGNED_OUT;
-            });
-
-            // Figure out our initial status
-            this.status = auth.get()
-              ? GoogleSheetModel.STATUS.SIGNED_IN : GoogleSheetModel.STATUS.SIGNED_OUT;
-          }, error => {
-            this.status = GoogleSheetModel.STATUS.ERROR;
-            console.warn('Error in google authentication:', error);
-          });
+          }).then(resolve, reject);
         }, 10);
+      });
+    }
+    return GoogleSheetModel._initPromise;
+  }
+  async setupAuth (apiKey, clientId) {
+    await this.ready;
+
+    if (this.mode === GoogleSheetModel.MODE.AUTH_READ_ONLY ||
+        this.mode === GoogleSheetModel.MODE.AUTH_READ_WRITE) {
+      gapi.load('client:auth2', async () => {
+        try {
+          await this._initWorkaroundPromise(apiKey, clientId);
+        } catch (error) {
+          this.status = GoogleSheetModel.STATUS.ERROR;
+          throw error;
+        }
+
+        const auth = gapi.auth2.getAuthInstance().isSignedIn;
+
+        // Listen for status changes
+        auth.listen(signedIn => {
+          this.status = signedIn
+            ? GoogleSheetModel.STATUS.SIGNED_IN : GoogleSheetModel.STATUS.SIGNED_OUT;
+        });
+
+        // Figure out our initial status
+        this.status = auth.get()
+          ? GoogleSheetModel.STATUS.SIGNED_IN : GoogleSheetModel.STATUS.SIGNED_OUT;
       });
     } else {
       this.status = GoogleSheetModel.STATUS.NO_AUTH;
