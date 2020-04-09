@@ -367,7 +367,7 @@ class GoogleSheetModel extends Model {
       throw new Error(`Mode ${this.mode} not supported yet`);
     }
 
-    this.range = options.range || 'Sheet1';
+    this.sheet = options.sheet || 'Sheet1';
     this._cache = null;
     this._status = GoogleSheetModel.STATUS.PENDING;
   }
@@ -434,25 +434,158 @@ class GoogleSheetModel extends Model {
     this.trigger('statusChanged', status);
   }
 
-  getValues() {
-    return this._cache && this._cache.values;
+  getHeaders() {
+    const rawTable = this.getRawTable();
+    return rawTable.length > 0 ? rawTable[0] : [];
   }
 
-  async addRows(values) {
+  getValues() {
+    if (!this._valueCache) {
+      const headers = this.getHeaders();
+      this._valueCache = this.getRawTable().slice(1).map(row => {
+        const obj = {};
+
+        for (let i = 0; i < headers.length || i < row.length; i++) {
+          let header = headers[i] || 'Blank Header';
+
+          if (obj[header] !== undefined) {
+            let extraHeader = 1;
+
+            while (obj[header + extraHeader] !== undefined) {
+              extraHeader += 1;
+            }
+
+            header = header + extraHeader;
+          }
+
+          obj[header] = row[i] || '';
+        }
+
+        return obj;
+      });
+    }
+
+    return this._valueCache;
+  }
+
+  getRawTable() {
+    return this._cache && this._cache.values || [];
+  }
+
+  async addRows(rows) {
+    const headers = this.getHeaders();
+    const initialHeaderLength = headers.length;
+    await this.addRawRows(rows.map(row => {
+      const list = [];
+      const temp = Object.assign({}, row);
+
+      for (const header of headers) {
+        list.push(temp[header]);
+        delete temp[header];
+      }
+
+      for (const [header, value] of Object.entries(temp)) {
+        headers.push(header);
+        list.push(value);
+      }
+
+      return list;
+    }), true);
+
+    if (initialHeaderLength < headers.length) {
+      try {
+        await gapi.client.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: this.sheet + '!1:1',
+          valueInputOption: 'RAW'
+        }, {
+          majorDimension: 'ROWS',
+          values: [headers]
+        });
+      } catch (err) {
+        this.status = GoogleSheetModel.STATUS.ERROR;
+        throw err;
+      }
+    }
+
+    await this.updateCache();
+  }
+
+  async removeRows(startIndex, endIndex) {
+    try {
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        resource: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: 0,
+                dimension: 'ROWS',
+                startIndex,
+                endIndex
+              }
+            }
+          }]
+        }
+      });
+    } catch (err) {
+      this.status = GoogleSheetModel.STATUS.ERROR;
+      throw err;
+    }
+
+    await this.updateCache();
+  }
+
+  async removeColumn(colName) {
+    const headers = this.getHeaders();
+    const index = headers.indexOf(colName);
+
+    if (index === -1) {
+      throw new Error(`Can't remove non-existent column ${colName}`);
+    }
+
+    try {
+      await gapi.client.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        resource: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: 0,
+                dimension: 'COLUMNS',
+                startIndex: index,
+                endIndex: index + 1
+              }
+            }
+          }]
+        }
+      });
+    } catch (err) {
+      this.status = GoogleSheetModel.STATUS.ERROR;
+      throw err;
+    }
+
+    await this.updateCache();
+  }
+
+  async addRawRows(rows, skipCacheUpdate = false) {
     try {
       await gapi.client.sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
-        range: this.range,
+        range: this.sheet,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS'
       }, {
         majorDimension: 'ROWS',
-        values: values
+        values: rows
       });
-      await this.updateCache();
     } catch (err) {
       this.status = GoogleSheetModel.STATUS.ERROR;
       throw err;
+    }
+
+    if (!skipCacheUpdate) {
+      await this.updateCache();
     }
   }
 
@@ -460,9 +593,10 @@ class GoogleSheetModel extends Model {
     try {
       const response = await gapi.client.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: this.range
+        range: this.sheet
       });
       this._cache = response.result;
+      delete this._valueCache;
       this.trigger('dataUpdated');
     } catch (err) {
       this.status = GoogleSheetModel.STATUS.ERROR;

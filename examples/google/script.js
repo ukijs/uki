@@ -9,7 +9,7 @@ class CustomView extends View {
       // Point this to a spreadsheet that your google account has write access to:
       spreadsheetId: '15u2YOyqXpGr8krpBP55qC4gxmAwDwFfKLEgyuoIpnMM',
       mode: GoogleSheetModel.MODE.AUTH_READ_WRITE,
-      range: 'Class Data!A1:E'
+      sheet: 'Class Data'
     });
     // You should include your own apiKey / clientId. These should work for
     // the demo on localhost, but you'll need your own for anything else
@@ -38,21 +38,51 @@ class CustomView extends View {
       .text('Add Rows')
       .on('click', () => {
         this.model.addRows([
-          ['Jeffrey', 'Male', '6. Retired Dude', 'CA', 'Abiding'],
-          ['Walter', 'Male', '5. Former Soldier', 'CA', 'Bowling'],
-          ['Donny', 'Male', '7. Unknown', 'CA', 'Possible figment of Walter\'s imagination']
+          {
+            'Student Name': 'Jeffrey',
+            Gender: 'Male',
+            'Class Level': '6. Retired Dude',
+            'Home State': 'WA',
+            Major: 'Abiding'
+          },
+          {
+            'Student Name': 'Walter',
+            Gender: 'Male',
+            'Class Level': '5. Former Soldier',
+            'Deployment': 'Vietnam',
+            'Home State': 'CA',
+            Major: 'Bowling'
+          },
+          {
+            'Student Name': 'Donny',
+            Gender: 'Male',
+            'Home State': 'CA',
+            Errata: 'Possible figment of Walter\'s imagination'
+          }
         ]);
+      });
+    this.d3el.append('button')
+      .text('Reset')
+      .on('click', async () => {
+        await this.model.removeRows(31, this.model.getRawTable().length);
+        await this.model.removeColumn('Deployment');
+        await this.model.removeColumn('Errata');
       });
     this.d3el.append('div')
       .classed('status', true);
-    this.d3el.append('pre')
+    this.d3el.append('div')
       .classed('data', true);
   }
   draw () {
     this.d3el.select('.status')
       .text('Current Google Authentication: ' + this.model.status);
-    this.d3el.select('.data')
-      .text((this.model.getValues() || []).join('\n'));
+    let dataRows = this.d3el.select('.data').selectAll('pre')
+      .data(this.model.getValues() || []);
+    dataRows.exit().remove();
+    const dataRowsEnter = dataRows.enter().append('pre');
+    dataRows = dataRows.merge(dataRowsEnter);
+
+    dataRows.text(d => JSON.stringify(d));
   }
 }
 
