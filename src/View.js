@@ -4,9 +4,9 @@ import Model from './Model.js';
  * View classes
  */
 class View extends Model {
-  constructor (d3el = null, resources) {
-    super(resources);
-    this.d3el = this.checkForEmptySelection(d3el);
+  constructor (options = {}) {
+    super(options);
+    this.d3el = this.checkForEmptySelection(options.d3el || null);
     this.dirty = true;
     this._drawTimeout = null;
     this._renderResolves = [];

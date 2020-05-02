@@ -1,14 +1,14 @@
 /* globals d3 */
-import { View, GoogleSheetModel } from '../uki.esm.js';
+import { View, google } from '../uki.esm.js';
 
 class CustomView extends View {
-  constructor (d3el) {
-    super(d3el);
+  constructor (options) {
+    super(options);
 
-    this.model = new GoogleSheetModel([], {
+    this.model = new google.AuthSheetModel({
       // Point this to a spreadsheet that your google account has write access to:
       spreadsheetId: '15u2YOyqXpGr8krpBP55qC4gxmAwDwFfKLEgyuoIpnMM',
-      mode: GoogleSheetModel.MODE.AUTH_READ_WRITE,
+      mode: google.AuthSheetModel.MODE.AUTH_READ_WRITE,
       sheet: 'Class Data'
     });
     // You should include your own apiKey / clientId. These should work for
@@ -86,7 +86,7 @@ class CustomView extends View {
   }
 }
 
-window.testView = new CustomView(d3.select('#myView'));
+window.testView = new CustomView({ d3el: d3.select('#myView') });
 window.onload = () => {
   window.testView.render();
 };

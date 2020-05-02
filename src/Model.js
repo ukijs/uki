@@ -1,16 +1,16 @@
 /* globals d3, less */
 
 class Model {
-  constructor (resources = []) {
+  constructor (options = {}) {
     this._eventHandlers = {};
     this._stickyTriggers = {};
     this.ready = new Promise(async (resolve, reject) => {
-      await this._loadResources(resources);
+      await this._loadResources(options.resources || []);
       this.trigger('load');
       resolve();
     });
   }
-  _loadJS (url, extraAttrs = {}) {
+  _loadJS (url, raw, extraAttrs = {}) {
     if (document.querySelector(`script[src="${url}"]`)) {
       // We've already added this script
       return;
@@ -23,45 +23,64 @@ class Model {
     const loadPromise = new Promise((resolve, reject) => {
       script.onload = () => { resolve(script); };
     });
-    script.src = url;
+    if (url) {
+      script.src = url;
+    } else if (raw) {
+      script.innerText = raw;
+    } else {
+      throw new Error('Either a url or raw argument is required for JS resources');
+    }
     document.getElementsByTagName('head')[0].appendChild(script);
     return loadPromise;
   }
-  _loadCSS (url, extraAttrs = {}) {
-    if (document.querySelector(`link[href="${url}"]`)) {
-      // We've already added this stylesheet
-      return;
+  _loadCSS (url, raw, extraAttrs = {}) {
+    if (url) {
+      if (document.querySelector(`link[href="${url}"]`)) {
+        // We've already added this stylesheet
+        return;
+      }
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.type = 'text/css';
+      link.media = 'screen';
+      for (const [key, value] of Object.keys(extraAttrs)) {
+        link.setAttribute(key, value);
+      }
+      const loadPromise = new Promise((resolve, reject) => {
+        link.onload = () => { resolve(link); };
+      });
+      link.href = url;
+      document.getElementsByTagName('head')[0].appendChild(link);
+      return loadPromise;
+    } else if (raw) {
+      const style = document.createElement('style');
+      style.type = 'text/css';
+      for (const [key, value] of Object.keys(extraAttrs)) {
+        style.setAttribute(key, value);
+      }
+      style.innerText = raw;
+      document.getElementsByTagName('head')[0].appendChild(style);
+      return Promise.resolve(style);
+    } else {
+      throw new Error('Either a url or raw argument is required for CSS resources');
     }
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.type = 'text/css';
-    link.media = 'screen';
-    for (const [key, value] of Object.keys(extraAttrs)) {
-      link.setAttribute(key, value);
-    }
-    const loadPromise = new Promise((resolve, reject) => {
-      link.onload = () => { resolve(link); };
-    });
-    link.href = url;
-    document.getElementsByTagName('head')[0].appendChild(link);
-    return loadPromise;
   }
-  async _loadLESS (url, extraAttrs = {}) {
+  async _loadLESS (url, raw, extraAttrs = {}) {
     if (Model.LOADED_LESS[url] || document.querySelector(`link[href="${url}"]`)) {
       // We've already added this stylesheet
       return;
     }
     // TODO: maybe do magic to make LESS variables accessible under this.resources?
-    const result = await less.render(`@import '${url}';`);
-    const style = document.createElement('style');
-    style.type = 'text/css';
-    for (const [key, value] of Object.keys(extraAttrs)) {
-      style.setAttribute(key, value);
-    }
-    style.innerHTML = result.css;
     Model.LOADED_LESS[url] = true;
-    document.getElementsByTagName('head')[0].appendChild(style);
-    return Promise.resolve(style);
+    let result;
+    if (url) {
+      result = await less.render(`@import '${url}';`);
+    } else if (raw) {
+      result = await less.render(raw);
+    } else {
+      throw new Error('Either a url or raw argument is required for LESS resources');
+    }
+    return this._loadCSS(undefined, result.css, extraAttrs);
   }
   async _loadResources (specs = []) {
     // Get d3.js if needed
@@ -91,16 +110,16 @@ class Model {
         return spec;
       } else if (spec.type === 'css') {
         // Load pure css directly
-        p = this._loadCSS(spec.url, spec.extraAttributes || {});
+        p = this._loadCSS(spec.url, spec.raw, spec.extraAttributes || {});
       } else if (spec.type === 'less') {
         // Convert LESS to CSS
-        p = this._loadLESS(spec.url, spec.extraAttributes || {});
+        p = this._loadLESS(spec.url, spec.raw, spec.extraAttributes || {});
       } else if (spec.type === 'fetch') {
         // Raw fetch request
         p = window.fetch(spec.url, spec.init || {});
       } else if (spec.type === 'js') {
         // Load a legacy JS script (i.e. something that can't be ES6-imported)
-        p = this._loadJS(spec.url, spec.extraAttributes || {});
+        p = this._loadJS(spec.url, spec.raw, spec.extraAttributes || {});
       } else if (d3[spec.type]) {
         // One of D3's native types
         const args = [];
@@ -119,7 +138,11 @@ class Model {
         throw new Error(`Can't load resource ${spec.url} of type ${spec.type}`);
       }
       if (spec.then) {
-        p.then(spec.then);
+        if (spec.storeOriginalResult) {
+          p.then(spec.then);
+        } else {
+          p = p.then(spec.then);
+        }
       }
       return p;
     });

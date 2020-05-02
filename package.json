@@ -1,6 +1,6 @@
 {
   "name": "uki",
-  "version": "0.5.6",
+  "version": "0.6.0",
   "description": "Minimal, d3-based Model-View library",
   "module": "dist/uki.esm.js",
   "jsnext:main": "dist/uki.esm.js",
@@ -21,16 +21,15 @@
   },
   "homepage": "https://github.com/alex-r-bigelow/uki#readme",
   "devDependencies": {
-    "@babel/core": "^7.8.7",
-    "@babel/preset-env": "^7.8.7",
     "rollup": "^2.0.0",
-    "rollup-plugin-babel": "^4.3.3",
+    "rollup-plugin-string": "^3.0.0",
     "serve": "^11.3.0"
   },
   "peerDependencies": {
     "d3": "^5.15.0"
   },
   "optionalDependencies": {
+    "golden-layout": "^1.5.9",
     "less": "^3.11.1"
   }
 }

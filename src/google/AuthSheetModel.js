@@ -1,53 +1,54 @@
 /* globals gapi */
 import Model from '../Model.js';
 
-class GoogleSheetModel extends Model {
-  constructor (resources = [], options) {
+class AuthSheetModel extends Model {
+  constructor (options = {}) {
     if (!window.gapi) {
-      resources.push({ type: 'js', url: 'https://apis.google.com/js/api.js' });
+      options.resources = options.resources || [];
+      options.resources.push({ type: 'js', url: 'https://apis.google.com/js/api.js' });
     }
-    super(resources);
+    super(options);
 
     this.spreadsheetId = options.spreadsheetId;
-    this.mode = options.mode || GoogleSheetModel.MODE.AUTH_READ_ONLY;
-    if (!GoogleSheetModel.MODE[this.mode]) {
+    this.mode = options.mode || AuthSheetModel.MODE.AUTH_READ_ONLY;
+    if (!AuthSheetModel.MODE[this.mode]) {
       throw new Error(`Mode ${this.mode} not supported yet`);
     }
     this.sheet = options.sheet || 'Sheet1';
 
     this._cache = null;
-    this._status = GoogleSheetModel.STATUS.PENDING;
+    this._status = AuthSheetModel.STATUS.PENDING;
   }
   async _initWorkaroundPromise (apiKey, clientId) {
     // Really annoying google bug: https://github.com/google/google-api-javascript-client/issues/399
     // means that we have to wait 10ms before actually trying to call init() or it fails silently
     // :rage_emoji: ... can I please have the last week of my life back?
-    if (!GoogleSheetModel._initPromise) {
-      GoogleSheetModel._initPromise = new Promise((resolve, reject) => {
+    if (!AuthSheetModel._initPromise) {
+      AuthSheetModel._initPromise = new Promise((resolve, reject) => {
         window.setTimeout(() => {
           gapi.client.init({
             apiKey: apiKey,
             clientId: clientId,
             discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
-            scope: this.mode === GoogleSheetModel.MODE.AUTH_READ_ONLY
+            scope: this.mode === AuthSheetModel.MODE.AUTH_READ_ONLY
               ? 'https://www.googleapis.com/auth/spreadsheets.readonly'
               : 'https://www.googleapis.com/auth/spreadsheets'
           }).then(resolve, reject);
         }, 10);
       });
     }
-    return GoogleSheetModel._initPromise;
+    return AuthSheetModel._initPromise;
   }
   async setupAuth (apiKey, clientId) {
     await this.ready;
 
-    if (this.mode === GoogleSheetModel.MODE.AUTH_READ_ONLY ||
-        this.mode === GoogleSheetModel.MODE.AUTH_READ_WRITE) {
+    if (this.mode === AuthSheetModel.MODE.AUTH_READ_ONLY ||
+        this.mode === AuthSheetModel.MODE.AUTH_READ_WRITE) {
       gapi.load('client:auth2', async () => {
         try {
           await this._initWorkaroundPromise(apiKey, clientId);
         } catch (error) {
-          this.status = GoogleSheetModel.STATUS.ERROR;
+          this.status = AuthSheetModel.STATUS.ERROR;
           throw error;
         }
 
@@ -56,15 +57,15 @@ class GoogleSheetModel extends Model {
         // Listen for status changes
         auth.listen(signedIn => {
           this.status = signedIn
-            ? GoogleSheetModel.STATUS.SIGNED_IN : GoogleSheetModel.STATUS.SIGNED_OUT;
+            ? AuthSheetModel.STATUS.SIGNED_IN : AuthSheetModel.STATUS.SIGNED_OUT;
         });
 
         // Figure out our initial status
         this.status = auth.get()
-          ? GoogleSheetModel.STATUS.SIGNED_IN : GoogleSheetModel.STATUS.SIGNED_OUT;
+          ? AuthSheetModel.STATUS.SIGNED_IN : AuthSheetModel.STATUS.SIGNED_OUT;
       });
     } else {
-      this.status = GoogleSheetModel.STATUS.NO_AUTH;
+      this.status = AuthSheetModel.STATUS.NO_AUTH;
     }
   }
   get status () {
@@ -72,7 +73,7 @@ class GoogleSheetModel extends Model {
   }
   set status (status) {
     this._status = status;
-    if (this._status === GoogleSheetModel.STATUS.SIGNED_IN) {
+    if (this._status === AuthSheetModel.STATUS.SIGNED_IN) {
       this.updateCache();
     } else {
       this._cache = null;
@@ -133,7 +134,7 @@ class GoogleSheetModel extends Model {
           values: [ headers ]
         });
       } catch (err) {
-        this.status = GoogleSheetModel.STATUS.ERROR;
+        this.status = AuthSheetModel.STATUS.ERROR;
         throw err;
       }
     }
@@ -159,7 +160,7 @@ class GoogleSheetModel extends Model {
         }
       });
     } catch (err) {
-      this.status = GoogleSheetModel.STATUS.ERROR;
+      this.status = AuthSheetModel.STATUS.ERROR;
       throw err;
     }
     await this.updateCache();
@@ -187,7 +188,7 @@ class GoogleSheetModel extends Model {
         }
       });
     } catch (err) {
-      this.status = GoogleSheetModel.STATUS.ERROR;
+      this.status = AuthSheetModel.STATUS.ERROR;
       throw err;
     }
     await this.updateCache();
@@ -204,7 +205,7 @@ class GoogleSheetModel extends Model {
         values: rows
       });
     } catch (err) {
-      this.status = GoogleSheetModel.STATUS.ERROR;
+      this.status = AuthSheetModel.STATUS.ERROR;
       throw err;
     }
     if (!skipCacheUpdate) {
@@ -221,7 +222,7 @@ class GoogleSheetModel extends Model {
       delete this._valueCache;
       this.trigger('dataUpdated');
     } catch (err) {
-      this.status = GoogleSheetModel.STATUS.ERROR;
+      this.status = AuthSheetModel.STATUS.ERROR;
       throw err;
     }
   }
@@ -239,7 +240,7 @@ class GoogleSheetModel extends Model {
   }
 }
 
-GoogleSheetModel.STATUS = {
+AuthSheetModel.STATUS = {
   'SIGNED_IN': 'SIGNED_IN',
   'SIGNED_OUT': 'SIGNED_OUT',
   'ERROR': 'ERROR',
@@ -247,11 +248,11 @@ GoogleSheetModel.STATUS = {
   'NO_AUTH': 'NO_AUTH'
 };
 
-GoogleSheetModel.MODE = {
+AuthSheetModel.MODE = {
   // 'FORM_CURATED_WRITE': 'FORM_CURATED_WRITE',
   // 'FORM_DANGEROUS_READ_WRITE': 'FORM_DANGEROUS_READ_WRITE',
   'AUTH_READ_ONLY': 'AUTH_READ_ONLY',
   'AUTH_READ_WRITE': 'AUTH_READ_WRITE'
 };
 
-export default GoogleSheetModel;
+export default AuthSheetModel;
