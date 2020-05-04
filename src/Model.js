@@ -11,17 +11,23 @@ class Model {
     });
   }
   _loadJS (url, raw, extraAttrs = {}) {
-    if (document.querySelector(`script[src="${url}"]`)) {
-      // We've already added this script
-      return;
+    if (Model.JS_PROMISES[url]) {
+      // We've already loaded the script
+      return Model.JS_PROMISES[url];
+      // TODO: probably not worth the extra check for
+      // document.querySelector(`script[src="${url}"]`)
+      // because we have no way of knowing if its onload() has already been
+      // been fired. Better to rely on clients to check on their own if a
+      // library already exists (i.e. was loaded outside uki) before trying to
+      // have uki load it
     }
     const script = document.createElement('script');
     script.type = 'application/javascript';
     for (const [key, value] of Object.entries(extraAttrs)) {
       script.setAttribute(key, value);
     }
-    const loadPromise = new Promise((resolve, reject) => {
-      script.onload = () => { resolve(script); };
+    Model.JS_PROMISES[url] = new Promise((resolve, reject) => {
+      script.addEventListener('load', () => { resolve(script); });
     });
     if (url) {
       script.src = url;
@@ -31,13 +37,13 @@ class Model {
       throw new Error('Either a url or raw argument is required for JS resources');
     }
     document.getElementsByTagName('head')[0].appendChild(script);
-    return loadPromise;
+    return Model.JS_PROMISES[url];
   }
   _loadCSS (url, raw, extraAttrs = {}) {
     if (url) {
       if (document.querySelector(`link[href="${url}"]`)) {
         // We've already added this stylesheet
-        return;
+        return Promise.resolve(document.querySelector(`link[href="${url}"]`));
       }
       const link = document.createElement('link');
       link.rel = 'stylesheet';
@@ -66,28 +72,32 @@ class Model {
     }
   }
   async _loadLESS (url, raw, extraAttrs = {}) {
-    if (Model.LOADED_LESS[url] || document.querySelector(`link[href="${url}"]`)) {
-      // We've already added this stylesheet
-      return;
+    // If we've already added this stylesheet, or are in the process of adding
+    // it, just point to the existing one
+    if (Model.LESS_PROMISES[url]) {
+      return Model.LESS_PROMISES[url];
+    } else if (document.querySelector(`link[href="${url}"]`)) {
+      return Promise.resolve(document.querySelector(`link[href="${url}"]`));
     }
-    // TODO: maybe do magic to make LESS variables accessible under this.resources?
-    Model.LOADED_LESS[url] = true;
-    let result;
+    let cssPromise;
     if (url) {
-      result = await less.render(`@import '${url}';`);
+      cssPromise = less.render(`@import '${url}';`);
     } else if (raw) {
-      result = await less.render(raw);
+      cssPromise = less.render(raw);
     } else {
       throw new Error('Either a url or raw argument is required for LESS resources');
     }
-    return this._loadCSS(undefined, result.css, extraAttrs);
+    Model.LESS_PROMISES[url] = cssPromise.then(result => {
+      // TODO: maybe do magic here to make LESS variables accessible under
+      // this.resources?
+      return this._loadCSS(undefined, result.css, extraAttrs);
+    });
+    return Model.LESS_PROMISES[url];
   }
   async _loadResources (specs = []) {
     // Get d3.js if needed
     if (!window.d3) {
-      await this._loadJS('https://cdnjs.cloudflare.com/ajax/libs/d3/5.15.1/d3.min.js', {
-        'data-log-level': '1'
-      });
+      await this._loadJS('https://d3js.org/d3.v5.min.js');
     }
 
     // Add and await LESS script if relevant
@@ -216,6 +226,7 @@ class Model {
     }, delay);
   }
 }
-Model.LOADED_LESS = {};
+Model.LESS_PROMISES = {};
+Model.JS_PROMISES = {};
 
 export default Model;

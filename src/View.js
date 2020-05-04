@@ -10,8 +10,10 @@ class View extends Model {
     this.dirty = true;
     this._drawTimeout = null;
     this._renderResolves = [];
-    this.debounceWait = 100;
-    this.render();
+    this.debounceWait = options.debounceWait || 100;
+    if (!options.suppressInitialRender) {
+      this.render();
+    }
   }
   checkForEmptySelection (d3el) {
     if (d3el && d3el.node() === null) {
@@ -40,8 +42,8 @@ class View extends Model {
     if (this.dirty && this._setupPromise === undefined) {
       // Need a fresh render; call setup immediately
       this.d3el = d3el;
-      this.updateContainerCharacteristics(d3el);
-      this._setupPromise = this.setup(d3el);
+      this.updateContainerCharacteristics(this.d3el);
+      this._setupPromise = this.setup(this.d3el);
       this.dirty = false;
       await this._setupPromise;
       delete this._setupPromise;
@@ -57,7 +59,7 @@ class View extends Model {
         if (this._setupPromise) {
           await this._setupPromise;
         }
-        await this.draw(d3el);
+        await this.draw(this.d3el);
         for (const r of this._renderResolves) {
           r();
         }
@@ -69,9 +71,15 @@ class View extends Model {
   setup (d3el) {}
   draw (d3el) {}
   updateContainerCharacteristics (d3el) {
-    this.bounds = d3el.node().getBoundingClientRect();
     this.emSize = parseFloat(d3el.style('font-size'));
     this.scrollBarSize = this.computeScrollBarSize(d3el);
+  }
+  getBounds (d3el = this.d3el) {
+    if (d3el) {
+      return d3el.node().getBoundingClientRect();
+    } else {
+      return { width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
+    }
   }
   computeScrollBarSize (d3el) {
     // blatantly adapted from SO thread:

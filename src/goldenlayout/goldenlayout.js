@@ -1,3 +1,11 @@
-import GoldenLayoutView from './GoldenLayoutView.js';
+import GLRootView from './GLRootView.js';
+import GLView from './GLView.js';
+import FixedGLViewMixin from './FixedGLViewMixin.js';
+import SvgViewMixin from './SvgViewMixin.js';
+import IFrameViewMixin from './IFrameViewMixin.js';
 
-export { GoldenLayoutView };
+export { GLRootView };
+export { GLView };
+export { FixedGLViewMixin };
+export { SvgViewMixin };
+export { IFrameViewMixin };

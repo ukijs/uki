@@ -1,39 +1,20 @@
 /* globals d3 */
+import FixedGLViewMixin from './FixedGLViewMixin.js';
+import lessStyle from './SvgViewMixin.less';
 
 const SvgViewMixin = function (superclass) {
-  const SvgView = class extends superclass {
-    constructor (argObj) {
-      argObj.resources = argObj.resources || [];
-      argObj.resources.push({
-        type: 'less', url: './views/common/SvgViewMixin.less'
+  const SvgView = class extends FixedGLViewMixin(superclass) {
+    constructor (options) {
+      options.resources = options.resources || [];
+      options.resources.push({
+        type: 'less', raw: lessStyle
       });
-      super(argObj);
-      this._previousBounds = { width: 0, height: 0 };
-    }
-    setupContentElement () {
-      return this.d3el.append('svg');
-    }
-    getAvailableSpace () {
-      // Don't rely on non-dynamic width / height for available space; use
-      // this.d3el instead
-      return super.getAvailableSpace(this.d3el);
-    }
-    draw () {
-      super.draw();
-
-      const bounds = this.getAvailableSpace();
-      if (this._previousBounds.width !== bounds.width ||
-          this._previousBounds.height !== bounds.height) {
-        this.trigger('svgResized');
-      }
-      this._previousBounds = bounds;
-      this.content
-        .attr('width', bounds.width)
-        .attr('height', bounds.height);
+      options.fixedTagType = 'svg';
+      super(options);
     }
     setupTab () {
       super.setupTab();
-      this.tabElement
+      this.glTabEl
         .classed('svgTab', true)
         .append('div')
         .classed('downloadIcon', true)
@@ -69,7 +50,7 @@ const SvgViewMixin = function (superclass) {
         }
       };
 
-      const original = this.content.node();
+      const original = this.d3el.node();
       const copy = original.cloneNode(true);
       copyStyles(original, copy);
 

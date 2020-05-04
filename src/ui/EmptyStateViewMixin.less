@@ -1,0 +1,14 @@
+@contentPadding: 0.25em;
+
+.EmptyStateViewWrapper {
+  position: absolute;
+  pointer-events: none;
+  .EmptyStateViewContent {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: @contentPadding;
+    right: @contentPadding;
+    text-align: center;
+  }
+}

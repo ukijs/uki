@@ -1,14 +1,17 @@
+import FixedGLViewMixin from './FixedGLViewMixin.js';
+import lessStyle from './IFrameViewMixin.less';
+
 const IFrameViewMixin = function (superclass) {
-  const IFrameView = class extends superclass {
-    constructor (argObj) {
-      argObj.resources = argObj.resources || [];
-      argObj.resources.push({
-        type: 'less', url: './views/common/IFrameViewMixin.less'
+  const IFrameView = class extends FixedGLViewMixin(superclass) {
+    constructor (options) {
+      options.resources = options.resources || [];
+      options.resources.push({
+        type: 'less', raw: lessStyle
       });
-      super(argObj);
-      this._src = argObj._src;
-      this._previousBounds = { width: 0, height: 0 };
-      this.frameLoaded = !this.src; // We are loaded if no src is initially provided
+      options.fixedTagType = 'iframe';
+      super(options);
+      this._src = options.src;
+      this.frameLoaded = !this._src; // We are loaded if no src is initially provided
     }
     get src () {
       return this._src;
@@ -20,39 +23,12 @@ const IFrameViewMixin = function (superclass) {
         .attr('src', this._src);
       this.render();
     }
-    setupContentElement () {
-      return this.d3el.append('iframe')
-        .classed('IFrameView', true)
-        .attr('src', this.src)
-        .on('load', () => {
-          this.frameLoaded = true;
-          this.render();
-        });
-    }
     get isLoading () {
       return super.isLoading || !this.frameLoaded;
     }
-    getAvailableSpace () {
-      // Don't rely on non-dynamic width / height for available space; use
-      // this.d3el instead
-      return super.getAvailableSpace(this.d3el);
-    }
-    draw () {
-      super.draw();
-
-      const bounds = this.getAvailableSpace();
-      if (this._previousBounds.width !== bounds.width ||
-          this._previousBounds.height !== bounds.height) {
-        this.trigger('viewResized');
-      }
-      this._previousBounds = bounds;
-      this.content
-        .attr('width', bounds.width)
-        .attr('height', bounds.height);
-    }
     setupTab () {
       super.setupTab();
-      this.tabElement
+      this.glTabEl
         .classed('IFrameTab', true)
         .append('div')
         .classed('linkIcon', true)
