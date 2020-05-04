@@ -26,7 +26,7 @@ const EmptyStateViewMixin = function (superclass) {
         .classed('EmptyStateViewWrapper', true)
         .style('display', 'none');
       this.emptyStateContent = this.emptyStateWrapper.append('div')
-        .classed('EmptyStateContent', true);
+        .classed('EmptyStateViewContent', true);
     }
     draw () {
       super.draw();

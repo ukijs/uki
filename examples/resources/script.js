@@ -44,7 +44,8 @@ class CustomView extends View {
         then: async data => {
           console.log('raw fetch finished', await data.json());
           return data;
-        }
+        },
+        loadAfter: ['template']
       },
       { // Can load other JS libraries
         type: 'js',

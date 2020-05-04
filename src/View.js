@@ -60,6 +60,7 @@ class View extends Model {
           await this._setupPromise;
         }
         await this.draw(this.d3el);
+        this.trigger('drawFinished');
         for (const r of this._renderResolves) {
           r();
         }

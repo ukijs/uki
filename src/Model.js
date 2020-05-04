@@ -72,27 +72,26 @@ class Model {
     }
   }
   async _loadLESS (url, raw, extraAttrs = {}) {
-    // If we've already added this stylesheet, or are in the process of adding
-    // it, just point to the existing one
-    if (Model.LESS_PROMISES[url]) {
-      return Model.LESS_PROMISES[url];
-    } else if (document.querySelector(`link[href="${url}"]`)) {
-      return Promise.resolve(document.querySelector(`link[href="${url}"]`));
-    }
-    let cssPromise;
     if (url) {
-      cssPromise = less.render(`@import '${url}';`);
+      if (Model.LESS_PROMISES[url]) {
+        return Model.LESS_PROMISES[url];
+      } else if (document.querySelector(`link[href="${url}"]`)) {
+        return Promise.resolve(document.querySelector(`link[href="${url}"]`));
+      }
     } else if (raw) {
-      cssPromise = less.render(raw);
+      if (Model.LESS_PROMISES[raw]) {
+        return Model.LESS_PROMISES[raw];
+      }
     } else {
       throw new Error('Either a url or raw argument is required for LESS resources');
     }
-    Model.LESS_PROMISES[url] = cssPromise.then(result => {
+    const cssPromise = url ? less.render(`@import '${url}';`) : less.render(raw);
+    Model.LESS_PROMISES[url || raw] = cssPromise.then(result => {
       // TODO: maybe do magic here to make LESS variables accessible under
       // this.resources?
       return this._loadCSS(undefined, result.css, extraAttrs);
     });
-    return Model.LESS_PROMISES[url];
+    return Model.LESS_PROMISES[url || raw];
   }
   async _getCoreResourcePromise (spec) {
     let p;
@@ -164,7 +163,7 @@ class Model {
         hasLESSresources = true;
       }
       for (const name of spec.loadAfter || []) {
-        if (!this._resourceLookup[name]) {
+        if (this._resourceLookup[name] === undefined) {
           throw new Error(`Can't loadAfter unknown resource: ${name}`);
         }
         result.push(this._resourceLookup[name]);
@@ -175,6 +174,7 @@ class Model {
     // Add and await LESS script if needed
     if (hasLESSresources && !window.less) {
       if (!window.less) {
+        window.less = { logLevel: 0 };
         await this._loadJS('https://cdnjs.cloudflare.com/ajax/libs/less.js/3.11.1/less.min.js');
       }
     }

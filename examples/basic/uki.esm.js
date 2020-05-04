@@ -72,27 +72,26 @@ class Model {
     }
   }
   async _loadLESS (url, raw, extraAttrs = {}) {
-    // If we've already added this stylesheet, or are in the process of adding
-    // it, just point to the existing one
-    if (Model.LESS_PROMISES[url]) {
-      return Model.LESS_PROMISES[url];
-    } else if (document.querySelector(`link[href="${url}"]`)) {
-      return Promise.resolve(document.querySelector(`link[href="${url}"]`));
-    }
-    let cssPromise;
     if (url) {
-      cssPromise = less.render(`@import '${url}';`);
+      if (Model.LESS_PROMISES[url]) {
+        return Model.LESS_PROMISES[url];
+      } else if (document.querySelector(`link[href="${url}"]`)) {
+        return Promise.resolve(document.querySelector(`link[href="${url}"]`));
+      }
     } else if (raw) {
-      cssPromise = less.render(raw);
+      if (Model.LESS_PROMISES[raw]) {
+        return Model.LESS_PROMISES[raw];
+      }
     } else {
       throw new Error('Either a url or raw argument is required for LESS resources');
     }
-    Model.LESS_PROMISES[url] = cssPromise.then(result => {
+    const cssPromise = url ? less.render(`@import '${url}';`) : less.render(raw);
+    Model.LESS_PROMISES[url || raw] = cssPromise.then(result => {
       // TODO: maybe do magic here to make LESS variables accessible under
       // this.resources?
       return this._loadCSS(undefined, result.css, extraAttrs);
     });
-    return Model.LESS_PROMISES[url];
+    return Model.LESS_PROMISES[url || raw];
   }
   async _getCoreResourcePromise (spec) {
     let p;
@@ -164,7 +163,7 @@ class Model {
         hasLESSresources = true;
       }
       for (const name of spec.loadAfter || []) {
-        if (!this._resourceLookup[name]) {
+        if (this._resourceLookup[name] === undefined) {
           throw new Error(`Can't loadAfter unknown resource: ${name}`);
         }
         result.push(this._resourceLookup[name]);
@@ -175,6 +174,7 @@ class Model {
     // Add and await LESS script if needed
     if (hasLESSresources && !window.less) {
       if (!window.less) {
+        window.less = { logLevel: 0 };
         await this._loadJS('https://cdnjs.cloudflare.com/ajax/libs/less.js/3.11.1/less.min.js');
       }
     }
@@ -339,6 +339,7 @@ class View extends Model {
           await this._setupPromise;
         }
         await this.draw(this.d3el);
+        this.trigger('drawFinished');
         for (const r of this._renderResolves) {
           r();
         }
@@ -388,7 +389,7 @@ class View extends Model {
   }
 }
 
-var defaultTheme = "/* This file isn't actually used; it's just here for reference, as it's what goldenlayout-custom-theme.less is based on */\n\n// Color variables (appears count calculates by raw css)\n@color0: #e1e1e1; // Appears 3 times\n@color1: #000000; // Appears 4 times\n@color2: #cccccc; // Appears 3 times\n@color3: #777777; // Appears 2 times\n\n@color4: #ffffff; // Appears 1 time\n@color5: #555555; // Appears 1 time\n@color6: #452500; // Appears 1 time\n@color7: #fafafa; // Appears 1 time\n@color8: #999999; // Appears 1 time\n@color9: #bbbbbb; // Appears 1 time\n@color10: #888888; // Appears 1 time\n@color11: #f4f4f4; // Appears 1 time\n\n// Images\n@lmCloseBlack: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAKUlEQVR4nGNgYGD4z4Af/Mdg4FKASwCnDf8JKSBoAtEmEXQTQd8RDCcA6+4Q8OvIgasAAAAASUVORK5CYII=\");\n@lmPopoutBlack: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAANUlEQVR4nI2QMQoAMAwCz5L/f9mOzZIaN0E9UDyZhaaQz6atgBHgambEJ5wBKoS0WaIvfT+6K2MIECN19MAAAAAASUVORK5CYII=\");\n@lmMaximiseBlack: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAIklEQVR4nGNkYGD4z0AAMBFSAAOETPpPlEmDUREjAxHhBABPvAQLFv3qngAAAABJRU5ErkJggg==\");\n@lmDockedBlack: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1MAAA6mAAADqYAAAXb5JfxUYAAAC6SURBVHjavNRRFYIwFAbgLwJRaCBRaCIRbGAEaSARaKANpMF8GedM3BSV4wMvY/u4+++GEIItns8m0/wMoUHA8WsIFS7oMOawtVCPPkGfsFeLa+ywx4RqUeEDVgIuMY8R11zIcZthfpfLYsKQVpCZc1p+oFTRhLbQuVvMrHqbUQmLVXQftT/JoE3GhtKhLCFtRLq5sphNQL0KSpB2sc0zrquuyBLJZFa/hUpI2vZVtx+HErL5b+Qv0H0Axmb86JFNd6MAAAAASUVORK5CYII=\");\n@lmMinimizeBlack: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAJklEQVR4nGP8//8/AyHARFDFUFbEwsDAwMDIyIgzHP7//89IlEkApSkHEScJTKoAAAAASUVORK5CYII=\");\n@lmPopinBlack: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAAJCAYAAADpeqZqAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH5AIMBA8Y4uozqQAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUHAAAAQ0lEQVQY072OMQ6AMAzEzhH//7I7oKKKoSULXjI5Z5KokgXAbEANoMq8WwGs3FOcvq/Ul5w311zqSNVdefJ+kUjSzhteChsRI/jXegAAAABJRU5ErkJggg==\");\n\n// \".lm_dragging\" is applied to BODY tag during Drag and is also directly applied to the root of the object being dragged\n\n// Entire GoldenLayout Container, if a background is set, it is visible as color of \"pane header\" and \"splitters\" (if these latest has opacity very low)\n.lm_goldenlayout {\n  background:@color11;\n}\n\n// Single Pane content (area in which final dragged content is contained)\n.lm_content {\n  background: @color0;\n  border: 1px solid @color2;\n}\n\n// Single Pane content during Drag (style of moving window following mouse)\n.lm_dragProxy {\n  .lm_content {\n    box-shadow: 2px 2px 4px fade(@color1,20%);\n  }\n}\n\n// Placeholder Container of target position\n.lm_dropTargetIndicator {\n  box-shadow: inset 0 0 30px fade(@color1,40%);\n  outline: 1px dashed @color2;\n\n  // Inner Placeholder\n  .lm_inner {\n    background: @color1;\n    opacity: 0.1;\n  }\n}\n\n// Separator line (handle to change pane size)\n.lm_splitter {\n  background: @color8;\n  opacity: 0.001;\n  transition: opacity 200ms ease;\n\n  &:hover, // When hovered by mouse...\n  &.lm_dragging {\n    background: @color9;\n    opacity: 1;\n  }\n}\n\n// Pane Header (container of Tabs for each pane)\n.lm_header {\n  height: 20px;\n\n  // Single Tab container. A single Tab is set for each pane, a group of Tabs are contained in \".lm_header\"\n  .lm_tab {\n    font-family: Arial, sans-serif;\n    font-size: 12px;\n    color: @color10;\n    background: @color7;\n    margin-right: 2px;\n    padding-bottom: 4px;\n    border: 1px solid @color2;\n    border-bottom: none;\n\n    .lm_title {\n      padding-top: 1px;\n    }\n\n    // Close Tab Icon\n    .lm_close_tab {\n      width: 11px;\n      height: 11px;\n      background-image: @lmCloseBlack;\n      background-position: center center;\n      background-repeat: no-repeat;\n      top: 4px;\n      right: 6px;\n      opacity: 0.4;\n\n      &:hover {\n        opacity: 1;\n      }\n    }\n\n    // If Tab is active, so if it's in foreground\n    &.lm_active {\n      border-bottom: none;\n      box-shadow: 2px -2px 2px -2px fade(@color1,20%);\n      padding-bottom: 5px;\n\n      .lm_close_tab {\n        opacity: 1;\n      }\n    }\n  }\n}\n\n.lm_dragProxy,\n.lm_stack {\n  &.lm_right {\n    .lm_header .lm_tab {\n      &.lm_active {\n        box-shadow: 2px -2px 2px -2px fade(@color1,20%);\n      }\n    }\n  }\n\n  &.lm_bottom {\n    .lm_header .lm_tab {\n      &.lm_active {\n        box-shadow: 2px 2px 2px -2px fade(@color1,20%);\n      }\n    }\n  }\n}\n\n// If Pane Header (container of Tabs for each pane) is selected (used only if addition of new Contents is made \"by selection\" and not \"by drag\")\n.lm_selected {\n  .lm_header {\n    background-color: @color6;\n  }\n}\n\n.lm_tab {\n  &:hover, // If Tab is hovered\n  &.lm_active // If Tab is active, so if it's in foreground\n  {\n    background: @color0;\n    color: @color3;\n  }\n}\n\n// Dropdown arrow for additional tabs when too many to be displayed\n.lm_header .lm_controls .lm_tabdropdown:before {\n  color: @color1;\n}\n\n// Pane controls (popout, maximize, minimize, close)\n.lm_controls {\n  // All Pane controls shares these\n  > li {\n    position: relative;\n    background-position: center center;\n    background-repeat: no-repeat;\n    opacity: 0.4;\n    transition: opacity 300ms ease;\n\n    &:hover {\n      opacity: 1;\n    }\n  }\n\n  // Icon to PopOut Pane, so move it to a different Browser Window\n  .lm_popout {\n    background-image: @lmPopoutBlack;\n  }\n\n  // Icon to Maximize Pane, so it will fill the entire GoldenLayout Container\n  .lm_maximise {\n    background-image: @lmMaximiseBlack;\n  }\n\n  // Icon to Close Pane and so remove it from GoldenLayout Container\n  .lm_close {\n    background-image: @lmCloseBlack;\n  }\n\n  // Icon to toggle Pane Docking at mouse hover\n  .lm_dock {\n    background-image: @lmDockedBlack;\n    transform:rotate(-45deg);\n    transition:transform 300ms;\n  }\n}\n\n.lm_stack.lm_docked {\n  .lm_controls .lm_dock {\n    transform:rotate(0deg);\n  }\n\n  > .lm_items {\n    border-color: @color9;\n    border-image: linear-gradient(to right, @color9 1%, @color4 100%);\n    box-shadow: 2px 2px 2px -2px fade(@color1,20%);\n  }\n}\n\n// If a specific Pane is maximized\n.lm_maximised {\n  // Pane Header (container of Tabs for each pane) can have different style when is Maximized\n  .lm_header {\n    background-color: @color4;\n  }\n\n  // Pane controls are different in Maximized Mode, especially the old Icon \"Maximise\" that now has a different meaning, so \"Minimize\" (even if CSS Class did not change)\n  .lm_controls {\n    .lm_maximise {\n      background-image: @lmMinimizeBlack;\n    }\n  }\n}\n\n.lm_transition_indicator {\n  background-color: @color1;\n  border: 1px dashed @color5;\n}\n\n// If a specific Pane is Popped Out, so move it to a different Browser Window, Icon to restore original position is:\n.lm_popin {\n  cursor: pointer;\n\n  // Background of Icon\n  .lm_bg {\n    background: @color1;\n    opacity: 0.7;\n  }\n\n  // Icon to Restore original position in Golden Layout Container\n  .lm_icon {\n    background-image: @lmPopinBlack;\n    background-position: center center;\n    background-repeat: no-repeat;\n    opacity: 0.7;\n  }\n\n  &:hover {\n    .lm_icon {\n      opacity: 1;\n    }\n  }\n}\n";
+var defaultTheme = "// Color variables (appears count calculates by raw css)\n@color0: #e1e1e1; // Appears 3 times\n@color1: #000000; // Appears 4 times\n@color2: #cccccc; // Appears 3 times\n@color3: #777777; // Appears 2 times\n\n@color4: #ffffff; // Appears 1 time\n@color5: #555555; // Appears 1 time\n@color6: #452500; // Appears 1 time\n@color7: #fafafa; // Appears 1 time\n@color8: #999999; // Appears 1 time\n@color9: #bbbbbb; // Appears 1 time\n@color10: #888888; // Appears 1 time\n@color11: #f4f4f4; // Appears 1 time\n\n// Images\n@lmCloseBlack: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAKUlEQVR4nGNgYGD4z4Af/Mdg4FKASwCnDf8JKSBoAtEmEXQTQd8RDCcA6+4Q8OvIgasAAAAASUVORK5CYII=\");\n@lmPopoutBlack: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAANUlEQVR4nI2QMQoAMAwCz5L/f9mOzZIaN0E9UDyZhaaQz6atgBHgambEJ5wBKoS0WaIvfT+6K2MIECN19MAAAAAASUVORK5CYII=\");\n@lmMaximiseBlack: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAIklEQVR4nGNkYGD4z0AAMBFSAAOETPpPlEmDUREjAxHhBABPvAQLFv3qngAAAABJRU5ErkJggg==\");\n@lmDockedBlack: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1MAAA6mAAADqYAAAXb5JfxUYAAAC6SURBVHjavNRRFYIwFAbgLwJRaCBRaCIRbGAEaSARaKANpMF8GedM3BSV4wMvY/u4+++GEIItns8m0/wMoUHA8WsIFS7oMOawtVCPPkGfsFeLa+ywx4RqUeEDVgIuMY8R11zIcZthfpfLYsKQVpCZc1p+oFTRhLbQuVvMrHqbUQmLVXQftT/JoE3GhtKhLCFtRLq5sphNQL0KSpB2sc0zrquuyBLJZFa/hUpI2vZVtx+HErL5b+Qv0H0Axmb86JFNd6MAAAAASUVORK5CYII=\");\n@lmMinimizeBlack: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAJklEQVR4nGP8//8/AyHARFDFUFbEwsDAwMDIyIgzHP7//89IlEkApSkHEScJTKoAAAAASUVORK5CYII=\");\n@lmPopinBlack: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAAJCAYAAADpeqZqAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH5AIMBA8Y4uozqQAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUHAAAAQ0lEQVQY072OMQ6AMAzEzhH//7I7oKKKoSULXjI5Z5KokgXAbEANoMq8WwGs3FOcvq/Ul5w311zqSNVdefJ+kUjSzhteChsRI/jXegAAAABJRU5ErkJggg==\");\n\n// \".lm_dragging\" is applied to BODY tag during Drag and is also directly applied to the root of the object being dragged\n\n// Entire GoldenLayout Container, if a background is set, it is visible as color of \"pane header\" and \"splitters\" (if these latest has opacity very low)\n.lm_goldenlayout {\n  background:@color11;\n}\n\n// Single Pane content (area in which final dragged content is contained)\n.lm_content {\n  background: @color0;\n  border: 1px solid @color2;\n}\n\n// Single Pane content during Drag (style of moving window following mouse)\n.lm_dragProxy {\n  .lm_content {\n    box-shadow: 2px 2px 4px fade(@color1,20%);\n  }\n}\n\n// Placeholder Container of target position\n.lm_dropTargetIndicator {\n  box-shadow: inset 0 0 30px fade(@color1,40%);\n  outline: 1px dashed @color2;\n\n  // Inner Placeholder\n  .lm_inner {\n    background: @color1;\n    opacity: 0.1;\n  }\n}\n\n// Separator line (handle to change pane size)\n.lm_splitter {\n  background: @color8;\n  opacity: 0.001;\n  transition: opacity 200ms ease;\n\n  &:hover, // When hovered by mouse...\n  &.lm_dragging {\n    background: @color9;\n    opacity: 1;\n  }\n}\n\n// Pane Header (container of Tabs for each pane)\n.lm_header {\n  height: 20px;\n\n  // Single Tab container. A single Tab is set for each pane, a group of Tabs are contained in \".lm_header\"\n  .lm_tab {\n    font-family: Arial, sans-serif;\n    font-size: 12px;\n    color: @color10;\n    background: @color7;\n    margin-right: 2px;\n    padding-bottom: 4px;\n    border: 1px solid @color2;\n    border-bottom: none;\n\n    .lm_title {\n      padding-top: 1px;\n    }\n\n    // Close Tab Icon\n    .lm_close_tab {\n      width: 11px;\n      height: 11px;\n      background-image: @lmCloseBlack;\n      background-position: center center;\n      background-repeat: no-repeat;\n      top: 4px;\n      right: 6px;\n      opacity: 0.4;\n\n      &:hover {\n        opacity: 1;\n      }\n    }\n\n    // If Tab is active, so if it's in foreground\n    &.lm_active {\n      border-bottom: none;\n      box-shadow: 2px -2px 2px -2px fade(@color1,20%);\n      padding-bottom: 5px;\n\n      .lm_close_tab {\n        opacity: 1;\n      }\n    }\n  }\n}\n\n.lm_dragProxy,\n.lm_stack {\n  &.lm_right {\n    .lm_header .lm_tab {\n      &.lm_active {\n        box-shadow: 2px -2px 2px -2px fade(@color1,20%);\n      }\n    }\n  }\n\n  &.lm_bottom {\n    .lm_header .lm_tab {\n      &.lm_active {\n        box-shadow: 2px 2px 2px -2px fade(@color1,20%);\n      }\n    }\n  }\n}\n\n// If Pane Header (container of Tabs for each pane) is selected (used only if addition of new Contents is made \"by selection\" and not \"by drag\")\n.lm_selected {\n  .lm_header {\n    background-color: @color6;\n  }\n}\n\n.lm_tab {\n  &:hover, // If Tab is hovered\n  &.lm_active // If Tab is active, so if it's in foreground\n  {\n    background: @color0;\n    color: @color3;\n  }\n}\n\n// Dropdown arrow for additional tabs when too many to be displayed\n.lm_header .lm_controls .lm_tabdropdown:before {\n  color: @color1;\n}\n\n// Pane controls (popout, maximize, minimize, close)\n.lm_controls {\n  // All Pane controls shares these\n  > li {\n    position: relative;\n    background-position: center center;\n    background-repeat: no-repeat;\n    opacity: 0.4;\n    transition: opacity 300ms ease;\n\n    &:hover {\n      opacity: 1;\n    }\n  }\n\n  // Icon to PopOut Pane, so move it to a different Browser Window\n  .lm_popout {\n    background-image: @lmPopoutBlack;\n  }\n\n  // Icon to Maximize Pane, so it will fill the entire GoldenLayout Container\n  .lm_maximise {\n    background-image: @lmMaximiseBlack;\n  }\n\n  // Icon to Close Pane and so remove it from GoldenLayout Container\n  .lm_close {\n    background-image: @lmCloseBlack;\n  }\n\n  // Icon to toggle Pane Docking at mouse hover\n  .lm_dock {\n    background-image: @lmDockedBlack;\n    transform:rotate(-45deg);\n    transition:transform 300ms;\n  }\n}\n\n.lm_stack.lm_docked {\n  .lm_controls .lm_dock {\n    transform:rotate(0deg);\n  }\n\n  > .lm_items {\n    border-color: @color9;\n    border-image: linear-gradient(to right, @color9 1%, @color4 100%);\n    box-shadow: 2px 2px 2px -2px fade(@color1,20%);\n  }\n}\n\n// If a specific Pane is maximized\n.lm_maximised {\n  // Pane Header (container of Tabs for each pane) can have different style when is Maximized\n  .lm_header {\n    background-color: @color4;\n  }\n\n  // Pane controls are different in Maximized Mode, especially the old Icon \"Maximise\" that now has a different meaning, so \"Minimize\" (even if CSS Class did not change)\n  .lm_controls {\n    .lm_maximise {\n      background-image: @lmMinimizeBlack;\n    }\n  }\n}\n\n.lm_transition_indicator {\n  background-color: @color1;\n  border: 1px dashed @color5;\n}\n\n// If a specific Pane is Popped Out, so move it to a different Browser Window, Icon to restore original position is:\n.lm_popin {\n  cursor: pointer;\n\n  // Background of Icon\n  .lm_bg {\n    background: @color1;\n    opacity: 0.7;\n  }\n\n  // Icon to Restore original position in Golden Layout Container\n  .lm_icon {\n    background-image: @lmPopinBlack;\n    background-position: center center;\n    background-repeat: no-repeat;\n    opacity: 0.7;\n  }\n\n  &:hover {\n    .lm_icon {\n      opacity: 1;\n    }\n  }\n}\n";
 
 /* globals GoldenLayout */
 
@@ -806,7 +807,7 @@ const IFrameViewMixin = function (superclass) {
         .classed('linkIcon', true)
         .attr('title', 'Open in new tab')
         .on('click', () => {
-          window.open(this.src, '_blank');
+          window.open(this._src, '_blank');
         });
     }
   };
@@ -1140,7 +1141,7 @@ Object.defineProperty(LoadingViewMixin, Symbol.hasInstance, {
   value: i => !!i._instanceOfLoadingViewMixin
 });
 
-var lessStyle$4 = "@contentPadding: 0.25em;\n\n.EmptyStateViewWrapper {\n  position: absolute;\n  pointer-events: none;\n  .EmptyStateViewContent {\n    position: absolute;\n    top: 50%;\n    transform: translateY(-50%);\n    left: @contentPadding;\n    right: @contentPadding;\n    text-align: center;\n  }\n}\n";
+var lessStyle$4 = "@contentPadding: 0.25em;\n\n.EmptyStateViewWrapper {\n  position: absolute;\n  width: 100%;\n  height: 100%;\n  pointer-events: none;\n  .EmptyStateViewContent {\n    position: absolute;\n    top: 50%;\n    transform: translateY(-50%);\n    left: @contentPadding;\n    right: @contentPadding;\n    text-align: center;\n  }\n}\n";
 
 /* globals d3 */
 
@@ -1169,7 +1170,7 @@ const EmptyStateViewMixin = function (superclass) {
         .classed('EmptyStateViewWrapper', true)
         .style('display', 'none');
       this.emptyStateContent = this.emptyStateWrapper.append('div')
-        .classed('EmptyStateContent', true);
+        .classed('EmptyStateViewContent', true);
     }
     draw () {
       super.draw();
@@ -1193,12 +1194,62 @@ Object.defineProperty(EmptyStateViewMixin, Symbol.hasInstance, {
   value: i => !!i._instanceOfEmptyStateViewMixin
 });
 
+const AnimatedViewMixin = function (superclass) {
+  const AnimatedView = class extends superclass {
+    constructor (options) {
+      super(options);
+      this.stop = false;
+      this.framerate = options.framerate || 60;
+      this.on('drawFinished.AnimatedViewMixin', () => {
+        this.off('drawFinished.AnimatedViewMixin');
+        this.startAnimationLoop();
+      });
+    }
+    startAnimationLoop () {
+      this.stop = false;
+      const timestamp = () => {
+        return window.performance && window.performance.now ? window.performance.now() : new Date().getTime();
+      };
+
+      let now;
+      let dt = 0;
+      let last = timestamp();
+      let step = 1 / this.framerate;
+
+      const frame = () => {
+        if (this.stop) {
+          return;
+        }
+        now = timestamp();
+        dt = dt + Math.min(1, (now - last) / 1000);
+        while (dt > step) {
+          dt = dt - step;
+          this.drawFrame(this.d3el, dt);
+        }
+        last = now;
+        window.requestAnimationFrame(frame);
+      };
+      window.requestAnimationFrame(frame);
+    }
+    stopAnimationLoop () {
+      this.stop = true;
+    }
+    drawFrame (d3el, timeSinceLastFrame) {}
+  };
+  AnimatedView.prototype._instanceOfAnimatedViewMixin = true;
+  return AnimatedView;
+};
+Object.defineProperty(AnimatedViewMixin, Symbol.hasInstance, {
+  value: i => !!i._instanceOfAnimatedViewMixin
+});
+
 
 
 var ui = /*#__PURE__*/Object.freeze({
   __proto__: null,
   LoadingViewMixin: LoadingViewMixin,
-  EmptyStateViewMixin: EmptyStateViewMixin
+  EmptyStateViewMixin: EmptyStateViewMixin,
+  AnimatedViewMixin: AnimatedViewMixin
 });
 
 export { Model, View, goldenlayout, google, ui, utils as util };

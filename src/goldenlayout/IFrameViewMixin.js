@@ -34,7 +34,7 @@ const IFrameViewMixin = function (superclass) {
         .classed('linkIcon', true)
         .attr('title', 'Open in new tab')
         .on('click', () => {
-          window.open(this.src, '_blank');
+          window.open(this._src, '_blank');
         });
     }
   };
