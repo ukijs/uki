@@ -28,12 +28,15 @@ class GLRootView extends View {
         extraAttributes: {
           integrity: 'sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=',
           crossorigin: 'anonymous'
-        }
+        },
+        name: 'jQuery'
       });
     }
     if (!window.GoldenLayout) {
       options.resources.push({
-        type: 'js', url: 'https://golden-layout.com/files/latest/js/goldenlayout.min.js'
+        type: 'js',
+        url: 'https://golden-layout.com/files/latest/js/goldenlayout.min.js',
+        loadAfter: ['jQuery']
       });
     }
     options.suppressInitialRender = true;

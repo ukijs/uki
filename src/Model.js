@@ -94,77 +94,127 @@ class Model {
     });
     return Model.LESS_PROMISES[url];
   }
+  async _getCoreResourcePromise (spec) {
+    let p;
+    if (spec instanceof Promise) {
+      // An arbitrary promise
+      return spec;
+    } else if (spec.type === 'css') {
+      // Load pure css directly
+      p = this._loadCSS(spec.url, spec.raw, spec.extraAttributes || {});
+    } else if (spec.type === 'less') {
+      // Convert LESS to CSS
+      p = this._loadLESS(spec.url, spec.raw, spec.extraAttributes || {});
+    } else if (spec.type === 'fetch') {
+      // Raw fetch request
+      p = window.fetch(spec.url, spec.init || {});
+    } else if (spec.type === 'js') {
+      // Load a legacy JS script (i.e. something that can't be ES6-imported)
+      p = this._loadJS(spec.url, spec.raw, spec.extraAttributes || {});
+    } else if (d3[spec.type]) {
+      // One of D3's native types
+      const args = [];
+      if (spec.init) {
+        args.push(spec.init);
+      }
+      if (spec.row) {
+        args.push(spec.row);
+      }
+      if (spec.type === 'dsv') {
+        p = d3[spec.type](spec.delimiter, spec.url, ...args);
+      } else {
+        p = d3[spec.type](spec.url, ...args);
+      }
+    } else {
+      throw new Error(`Can't load resource ${spec.url} of type ${spec.type}`);
+    }
+    if (spec.then) {
+      if (spec.storeOriginalResult) {
+        p.then(spec.then);
+      } else {
+        p = p.then(spec.then);
+      }
+    }
+    return p;
+  }
   async _loadResources (specs = []) {
-    // Get d3.js if needed
+    // uki itself needs d3.js; make sure it exists
     if (!window.d3) {
       await this._loadJS('https://d3js.org/d3.v5.min.js');
     }
 
-    // Add and await LESS script if relevant
-    const hasLESSresources = specs.find(spec => spec.type === 'less') ||
-      document.querySelector(`link[rel="stylesheet/less"]`);
+    // Don't need to do anything else; this makes some code cleaner below
+    if (specs.length === 0) {
+      return;
+    }
+
+    // First, construct a lookup of named dependencies
+    this._resourceLookup = {};
+    specs.forEach((spec, i) => {
+      if (spec.name) {
+        this._resourceLookup[spec.name] = i;
+      }
+    });
+    // Next, collect dependencies, with a deep copy for Kahn's algorithm to delete
+    let hasLESSresources = false;
+    const tempDependencies = [];
+    const dependencies = specs.map((spec, i) => {
+      const result = [];
+      if (spec.type === 'less') {
+        hasLESSresources = true;
+      }
+      for (const name of spec.loadAfter || []) {
+        if (!this._resourceLookup[name]) {
+          throw new Error(`Can't loadAfter unknown resource: ${name}`);
+        }
+        result.push(this._resourceLookup[name]);
+      }
+      tempDependencies.push(Array.from(result));
+      return result;
+    });
+    // Add and await LESS script if needed
     if (hasLESSresources && !window.less) {
       if (!window.less) {
         await this._loadJS('https://cdnjs.cloudflare.com/ajax/libs/less.js/3.11.1/less.min.js');
       }
     }
-
-    this._resourceLookup = {};
-    const resourcePromises = specs.map((spec, i) => {
-      if (spec.name) {
-        this._resourceLookup[spec.name] = i;
-      }
-      let p;
-      if (spec instanceof Promise) {
-        // An arbitrary promise
-        return spec;
-      } else if (spec.type === 'css') {
-        // Load pure css directly
-        p = this._loadCSS(spec.url, spec.raw, spec.extraAttributes || {});
-      } else if (spec.type === 'less') {
-        // Convert LESS to CSS
-        p = this._loadLESS(spec.url, spec.raw, spec.extraAttributes || {});
-      } else if (spec.type === 'fetch') {
-        // Raw fetch request
-        p = window.fetch(spec.url, spec.init || {});
-      } else if (spec.type === 'js') {
-        // Load a legacy JS script (i.e. something that can't be ES6-imported)
-        p = this._loadJS(spec.url, spec.raw, spec.extraAttributes || {});
-      } else if (d3[spec.type]) {
-        // One of D3's native types
-        const args = [];
-        if (spec.init) {
-          args.push(spec.init);
-        }
-        if (spec.row) {
-          args.push(spec.row);
-        }
-        if (spec.type === 'dsv') {
-          p = d3[spec.type](spec.delimiter, spec.url, ...args);
-        } else {
-          p = d3[spec.type](spec.url, ...args);
-        }
-      } else {
-        throw new Error(`Can't load resource ${spec.url} of type ${spec.type}`);
-      }
-      if (spec.then) {
-        if (spec.storeOriginalResult) {
-          p.then(spec.then);
-        } else {
-          p = p.then(spec.then);
+    // Now do Kahn's algorithm to topologically sort the graph, starting from
+    // the resources with no dependencies
+    let roots = Object.keys(specs)
+      .filter(index => dependencies[index].length === 0);
+    // Ensure that there's at least one root with no dependencies
+    if (roots.length === 0) {
+      throw new Error(`No resource without loadAfter dependencies`);
+    }
+    const topoSortOrder = [];
+    while (roots.length > 0) {
+      const index = parseInt(roots.shift());
+      topoSortOrder.push(index);
+      // Remove references to index from the graph
+      for (const [childIndex, refList] of Object.entries(tempDependencies)) {
+        const refIndex = refList.indexOf(index);
+        if (refIndex > -1) {
+          refList.splice(refIndex, 1);
+          // If we removed this child's last dependency, it can go into the roots
+          if (refList.length === 0) {
+            roots.push(childIndex);
+          }
         }
       }
-      return p;
-    });
+    }
+    if (topoSortOrder.length !== specs.length) {
+      throw new Error(`Cyclic loadAfter resource dependency`);
+    }
+    // Load dependencies in topological order
+    const resourcePromises = [];
+    for (const index of topoSortOrder) {
+      const parentPromises = dependencies[index]
+        .map(parentIndex => resourcePromises[parentIndex]);
+      resourcePromises[index] = Promise.all(parentPromises)
+        .then(() => this._getCoreResourcePromise(specs[index]));
+    }
 
     this.resources = await Promise.all(resourcePromises);
-
-    if (hasLESSresources) {
-      // Some views / other libraries (e.g. goldenLayout) require LESS styles
-      // to already be loaded before they attempt to render; this ensures that
-      // LESS styles NOT requested by uki are still loaded
-      await less.pageLoadFinished;
-    }
   }
   getNamedResource (name) {
     return this._resourceLookup[name] === undefined ? null
