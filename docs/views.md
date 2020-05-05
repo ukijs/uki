@@ -33,7 +33,7 @@ class MyView extends View {
   }
 }
 
-const view1 = new MyView(d3.select('#view1'));
+const view1 = new MyView({ d3el: d3.select('#view1') });
 const view2 = new MyView();
 
 view1.render();
@@ -61,26 +61,38 @@ and update when those changes are relevant, e.g.:
 
 ```javascript
 class MyModel extends Model () {
-  externalUpdate () {
-    // ...
+  constructor () {
+    super();
+    this.value = 'Original Value';
+  }
+  externalUpdate (newValue) {
+    this.value = newValue;
     this.trigger('update');
   }
 }
 
 class MyView extends View () {
-  constructor (d3el, sharedState) {
-    super(d3el, []);
+  constructor (options) {
+    super(options);
 
-    this.sharedState = sharedState;
+    this.sharedState = options.sharedState;
     this.sharedState.on('update', () => { this.render(); });
+  }
+  draw () {
+    this.d3el.text(this.sharedState)
   }
 }
 
 const state = new MyModel();
-const view = new MyView(d3.select('#view'), state);
+const view = new MyView({
+  d3el: d3.select('#view'),
+  sharedState: state
+});
 
-state.externalUpdate();
-// view will update itself after this call
+// view will show "Original Value"
+
+state.externalUpdate('New Value');
+// view will update itself to show "New Value" after this call
 ```
 
 ## Setup functions
@@ -118,31 +130,30 @@ myView.render(d3.select('#view2'));
 ## Draw functions
 `draw()` is where the meat of your d3 code should go, and a good habit is to
 use d3 `update` selections here as much as possible to avoid the classic `enter`
-vs `update` bugs that d3 developers frequently encounter.
+vs `update` bugs that new d3 developers frequently encounter.
 
 In the event that you want to fine-tune the rate at which `draw()` is debounced,
 you can tweak the `debounceWait` property of a view:
 
 ```javascript
 class MyView extends View {
-  constructor (d3el, resources) {
-    super(d3el, resources);
-    this.debounceWait = 10000;
+  constructor (options) {
+    super(options);
+    this.debounceWait = 10000; // wait for 10 sec instead of the default 0.1 sec
   }
 }
 
-const view = new MyView(d3.select('#view'));
+const view = new MyView({ d3el: d3.select('#view') });
 view.render();
 // Do something expensive here that lasts less than 10 seconds
 view.render();
 // There should only be one call to draw()
 ```
 
-# Drawing statistics
-For visual design, some statistics are often inconsistent across browsers and
+# Drawing sizes
+For visual design, some dimensions are often inconsistent across browsers and
 operating systems. For convenience, the following statistics are computed before
 each `setup` call:
 
 - `view.emSize`: the size of an EM in pixels
 - `view.scrollBarSize`: the size of a scrollbar in pixels
-- `view.bounds`: the result of `getBoundingClientRect` on the current `d3el`

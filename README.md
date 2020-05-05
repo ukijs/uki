@@ -72,9 +72,9 @@ window.onresize = () => {
 import { Model } from '../lib/uki.esm.js';
 class Graph extends Model {
   constructor () {
-    super([
+    super({ resources: [
       { type: 'json', url: '/models/Graph/miserables.json' }
-    ]);
+    ] });
     this.highlightedNode = null;
   }
   highlightNode (node) {
@@ -89,17 +89,17 @@ class Graph extends Model {
 import { View } from '../lib/uki.esm.js';
 class NodeLinkView extends View {
   constructor (graph) {
-    super(null, [
-      { type: 'text', url: '/views/NodeLinkView/template.html' },
+    super({ resources: [
+      { type: 'text', url: '/views/NodeLinkView/template.html', name: 'template' },
       { type: 'css', url: '/views/NodeLinkView/style.css' }
-    ]);
+    ] });
     this.graph = graph;
     this.graph.on('highlight', () => { this.render(); });
   }
   setup () {
     // The contents of template.html are put into the #nodeLinkView div exactly
     // once
-    this.d3el.html(this.resources[0]);
+    this.d3el.html(this.getNamedResource('template'));
   }
   draw () {
     // d3.js force-directed graph drawing would go here; a fully-implemented
@@ -128,22 +128,29 @@ class NodeLinkView extends View {
 ```
 
 # Why another framework?
-I rolled this together after lots of frustration with existing MVC frameworks
-(Angular and Backbone, I'm looking at you) that really constrain what you do,
-force you to read a ton of documentation, and make you drink their particular
-philosophical kool-aid—only to help you do some simple things.
+I rolled this together after lots of frustration with existing MVC frameworks.
+Among these frustrations:
+- Limited vision; frameworks often constrain what a web app can even be
+- Cryptic, non-existent, or duplicate forms of documentation (some of which is
+  out of date)
+- Non-optional philosophies—they have kool-aid, and make you drink it
+- Incompatibility with other frameworks / libraries (e.g. d3.js) that don't
+ subscribe to those philosophies
+- Nasty build processes (e.g. webpack) that aren't really needed now that native
+  ES6 imports are a thing
+- Introducing non-standard syntax that you have to learn beyond what the browser
+  already does natively—and in some cases, *re-learning* new variants of
+  existing syntax that are subtly different (React, I'm looking at you)
+... and all this, only to help you do some simple things.
 
 I don't claim this is better than anything else out there. But if any of these
 things sound appealing, maybe it's worth trying out:
 
-- Helps simplify the process of connecting different, existing views (e.g. from
+- No build process required. Use native Javascript + HTML + CSS however you want
+- Simplifies some of the issues of loading / fetching Javascript and
+  non-Javascript resources (e.g. CSV files, API calls, CSS stylesheets, SVG
+  templates) in a way that gives you more control over directory structures,
+  load order, and knowing when it's finally safe to start drawing something
+- Simplifies the process of connecting different, existing views (e.g. from
   [bl.ocks.org](https://bl.ocks.org/)) together in a linked view system
-- Simplifies some of the issues of loading / fetching non-Javascript resources
-  (e.g. CSV files, API calls, CSS stylesheets) in a way that *should* give you
-  more control over directory structures (e.g. if, like me, you like to have all
-  the JS, CSS, template HTML / SVG, and data files pertaining to a view in a
-  common directory)
-- Simplifies some of the setup / timing issues common to working with d3 (e.g.
-  setup vs update functions, making sure things render only after needed
-  resources have been loaded, etc)
 - Support for custom, d3-style, namespaced, non-blocking events

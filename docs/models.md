@@ -13,9 +13,14 @@ probably a good idea to create a Model to represent a dataset, and/or shared
 state across linked views.
 
 # Importing resources
-The only (optional) argument to a Model's constructor is an array of resources
-that are loaded, and the resulting parsed resources become available under the
-`.resources` property once the `.ready` promise resolves.
+You can give a `Model` an array of resources that will be loaded into the
+browser as the `Model` is created (if they haven't been loaded already). Where
+there is a parsed result (such as a CSV file), it can be accessed through the
+`this.resources` list (in the same order as the original `resources` option), or
+you can give a string `name` to resources that you can use for
+`getNamedResource()` access that doesn't depend on the order of that list.
+
+Resources are available from a `Model` once its `ready` Promise resolves.
 
 Each entry in the array should be an `Object` with `type` and `url` properties,
 for example:
@@ -23,40 +28,112 @@ for example:
 ```javascript
 class MyModel extends Model {
   constructor() {
-    super([
-      { type: 'csv', url: './myData.csv' },
-      { type: 'json', url: './myConfiguration.json' }
-    ]);
+    super({ resources: [
+      { type: 'csv', url: 'myData.csv' },
+      { type: 'json', url: 'myConfiguration.json' }
+    ] });
   }
 }
 
-...
+(async () => {
+  const myModel = new MyModel();
+  await myModel.ready;
 
-const myModel = new MyModel();
-await myModel.ready;
-
-console.log(myModel.resources[0]);
-// Logs the parsed contents of myData.csv
+  console.log(myModel.resources[0]);
+  // Logs the parsed contents of myData.csv
+})();
 ```
 
-## Supported `type`s
+## Controlling resource load order
+There are two options that you can add to a resource for more control over the
+timing of loading resources.
 
-- [D3.js native formats](#D3_js_native_formats)
-- [Stylesheets](#Stylesheets)
-- [Raw fetch requests](#Raw_fetch_requests)
-- [Generic Promises](#Generic_Promises)
+### `loadAfter`
+This option lets you tell `uki` not to load one resource until a list of other
+named resources has finished loading:
+
+```javascript
+class MyModel extends Model {
+  constructor() {
+    super({ resources: [
+      { type: 'json', url: 'myConfiguration.json', name: 'config' },
+      { type: 'csv', url: 'myData.csv', name: 'myData' },
+      { type: 'js', url: 'someOtherScript.js', loadAfter: ['config', 'myData'] }
+    ] });
+  }
+}
+```
+
+### `then`
+This function lets you add additional processing after a resource's internal
+Promise resolves:
+
+```javascript
+class MyModel extends Model {
+  constructor() {
+    super({ resources: [
+      {
+        type: 'json',
+        url: 'myConfiguration.json',
+        name: 'config',
+        storeOriginalResult: true,
+        then: () => {
+          console.log('config loaded');
+          // Note that there is no return statement!
+        }
+      },
+      {
+        type: 'csv',
+        url: 'cars.csv',
+        name: 'cars',
+        then: result => {
+          return result.map(row => {
+            return {
+              year: new Date(+d.Year, 0, 1),
+              make: d.Make,
+              model: d.Model,
+              length: +d.Length
+            };
+          });
+        }
+      }
+    ] });
+  }
+}
+
+(async () => {
+  const myModel = new MyModel();
+  await myModel.ready;
+  // config loaded
+
+  console.log(myModel.getNamedResource('cars'));
+  // ( logs the formatted version of cars.csv )
+  console.log(myModel.getNamedResource('config'));
+  // ( logs the contents of myConfiguration.json, not undefined,
+  //   because storeOriginalResult was set to true )
+})();
+```
+
+
+## Supported resource `type`s
+
+- [D3.js native formats](#d3_js_native_formats)
+- [Stylesheets](#stylesheets)
+- [Other JS libraries](#other_js_libraries)
+- [Raw fetch requests](#raw_fetch_requests)
+- [Generic Promises](#generic_promises)
 
 ### D3.js native formats
 All of [d3's supported
 formats](https://github.com/d3/d3-fetch/blob/v1.1.2/README.md#csv) can be
 imported as a resource. For each d3 type, use the `url` key in place of its
 `input` parameter, and additional arguments, such as `delimiter`, `init`, and
-`row` should be supplied with the respective key, e.g.:
+`row` should be supplied with the respective key, for example:
 
 ```javascript
 class MyModel extends Model {
   constructor() {
-    super([
+    super({ resources: [
       {
         type: 'dsv',
         delmiter: ',',
@@ -70,17 +147,21 @@ class MyModel extends Model {
             make: d.Make,
             model: d.Model,
             length: +d.Length
-          }
+          };
         }
       }
-    ]);
-  }
-  setup () {
-    // This logs the contents of cars.csv, reformatted according to the row
-    // function
-    console.log(this.resources[0]);
+    ] });
   }
 }
+
+(async () => {
+  const myModel = new MyModel();
+  await myModel.ready;
+
+  console.log(myModel.resources[0]);
+  // Logs the parsed contents of cars.csv, reformatted according to the row
+  // function
+})();
 ```
 
 Some more specific examples:
@@ -131,24 +212,14 @@ Some more specific examples:
 
 ### Stylesheets
 
-You can embed `CSS` and `LESS` stylesheets into the page's header by referring
-to them as resources as well. This probably make the most sense in the
-[context of a view](../README.md#What_does_this_look_like), but you can
-technically load anything from a model if that's what your use case requires.
+You can embed `CSS` and `LESS` stylesheets into the page's `<head>` by referring
+to them as resources as well. This probably makes the most sense in the [context
+of a View](../README.md#what_does_this_look_like) (`View`s extend the `Model`
+class), but you can technically load anything from a `Model` if that's what your
+use case requires.
 
 `uki` will avoid loading the same stylesheet more than once, even if it's loaded
-as a resource from multiple places.
-
-Note that to use LESS stylesheets, `less` will need to be in the global scope
-before this will work. The easiest way to do this is usually something like
-this:
-
-```html
-<head>
-  <script type="text/javascript" src="node_modules/less/dist/less.min.js" data-log-level="1"></script>
-  <script type="module" src="myApp.js"></script>
-</head>
-```
+as a resource by multiple `Model`s.
 
 Some examples:
 - CSS
@@ -158,6 +229,34 @@ Some examples:
 - LESS
 
   `{ type: 'less', url: 'http://path/to/some/file.less' }`
+
+### Other JS libraries
+
+Similar to stylesheets, you can inject scripts into the page's `<head>` directly
+from a model as a resource as well. Although `uki` will try to avoid loading
+the same script twice on its own, it's still usually a good idea to check if
+the needed library has already been loaded first:
+
+```javascript
+class MyModel extends Model {
+  constructor (options = {}) {
+    options.resources = options.resources || [];
+
+    // Only add jQuery as a resource if it's not available
+    if (!window.jQuery) {
+      options.resources.push({
+        type: 'js',
+        url: 'https://code.jquery.com/jquery-3.4.1.min.js',
+        extraAttributes: {
+          integrity: 'sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=',
+          crossorigin: 'anonymous'
+        },
+        name: 'jQuery'
+      });
+    }
+  }
+}
+```
 
 ### Raw fetch requests
 
@@ -174,11 +273,15 @@ class MyModel extends Model {
       })
     ]);
   }
-  setup () {
-    // Setup won't be called until this.resources[0] resolves
-    console.log('this will never be called', this.resources[0]);
-  }
 }
+
+(async () => {
+  const myModel = new MyModel();
+  await myModel.ready;
+
+  // myModel.ready won't resolve until this.resources[0] does
+  console.log('this will never be logged', this.resources[0]);
+})();
 ```
 
 # Custom events
