@@ -1,13 +1,12 @@
 /* globals d3 */
-import lessStyle from './LoadingViewMixin.less';
+import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
+import View from '../../View.js';
+import { RestylableMixin } from '../Restylable/Restylable.js';
+import defaultStyle from './style.less';
 
-const LoadingViewMixin = function (superclass) {
-  const LoadingView = class extends superclass {
+const { LoadingView, LoadingMixin } = createMixinAndDefault('LoadingMixin', View, superclass => {
+  class LoadingView extends RestylableMixin(superclass, defaultStyle, 'LoadingSpinner', true) {
     constructor (options) {
-      options.resources = options.resources || [];
-      options.resources.push({
-        type: 'less', raw: lessStyle
-      });
       super(options);
       this._loaded = false;
       this.on('load', () => {
@@ -23,7 +22,7 @@ const LoadingViewMixin = function (superclass) {
       // Place a layer on top of this.d3el
       const parent = d3.select(this.d3el.node().parentNode);
       this.spinner = parent.append('div')
-        .classed('LoadingViewMixinSpinner', true)
+        .classed('LoadingSpinner', true)
         .style('display', 'none');
     }
     draw () {
@@ -38,11 +37,7 @@ const LoadingViewMixin = function (superclass) {
         .style('bottom', bounds.bottom - parentBounds.bottom)
         .style('display', this.isLoading ? null : 'none');
     }
-  };
-  LoadingView.prototype._instanceOfLoadingViewMixin = true;
+  }
   return LoadingView;
-};
-Object.defineProperty(LoadingViewMixin, Symbol.hasInstance, {
-  value: i => !!i._instanceOfLoadingViewMixin
 });
-export default LoadingViewMixin;
+export { LoadingView, LoadingMixin };

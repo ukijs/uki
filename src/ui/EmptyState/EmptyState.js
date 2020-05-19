@@ -1,15 +1,11 @@
 /* globals d3 */
-import lessStyle from './EmptyStateViewMixin.less';
+import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
+import View from '../../View.js';
+import { RestylableMixin } from '../Restylable/Restylable.js';
+import defaultStyle from './style.less';
 
-const EmptyStateViewMixin = function (superclass) {
-  const EmptyStateView = class extends superclass {
-    constructor (options) {
-      options.resources = options.resources || [];
-      options.resources.push({
-        type: 'less', raw: lessStyle
-      });
-      super(options);
-    }
+const { EmptyStateView, EmptyStateMixin } = createMixinAndDefault('EmptyStateMixin', View, superclass => {
+  class EmptyStateView extends RestylableMixin(superclass, defaultStyle, 'EmptyStateLayer', true) {
     getEmptyMessage () {
       // Should be overridden by subclasses; return an html string (or falsey to
       // hide the empty state layer)
@@ -23,10 +19,10 @@ const EmptyStateViewMixin = function (superclass) {
       const wrapperNode = document.createElement('div');
       parentNode.insertBefore(wrapperNode, node);
       this.emptyStateWrapper = d3.select(wrapperNode)
-        .classed('EmptyStateViewWrapper', true)
+        .classed('EmptyStateLayer', true)
         .style('display', 'none');
       this.emptyStateContent = this.emptyStateWrapper.append('div')
-        .classed('EmptyStateViewContent', true);
+        .classed('EmptyStateLayerContent', true);
     }
     draw () {
       super.draw();
@@ -42,11 +38,7 @@ const EmptyStateViewMixin = function (superclass) {
         .style('bottom', bounds.bottom - parentBounds.bottom)
         .style('display', message ? null : 'none');
     }
-  };
-  EmptyStateView.prototype._instanceOfEmptyStateViewMixin = true;
+  }
   return EmptyStateView;
-};
-Object.defineProperty(EmptyStateViewMixin, Symbol.hasInstance, {
-  value: i => !!i._instanceOfEmptyStateViewMixin
 });
-export default EmptyStateViewMixin;
+export { EmptyStateView, EmptyStateMixin };

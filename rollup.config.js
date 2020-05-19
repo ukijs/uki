@@ -1,4 +1,5 @@
 import { string } from 'rollup-plugin-string';
+import less from 'rollup-plugin-less';
 import pkg from './package.json';
 
 // Derive some of the configuration from package.json
@@ -8,8 +9,9 @@ const allExternals = peerDependencies.concat(
   Object.keys(pkg.devDependencies || {}));
 const commonPlugins = [
   string({
-    include: ['**/*.less', '**/*.html', '**/*.svg']
-  })
+    include: ['**/*.html', '**/*.svg']
+  }),
+  less()
 ];
 
 // Basic build formats, without minification

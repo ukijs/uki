@@ -4,16 +4,17 @@ class Model {
   constructor (options = {}) {
     this._eventHandlers = {};
     this._stickyTriggers = {};
+    this._resourceSpecs = options.resources || [];
     this.ready = new Promise(async (resolve, reject) => {
-      await this._loadResources(options.resources || []);
+      await this._loadResources(this._resourceSpecs);
       this.trigger('load');
       resolve();
     });
   }
   _loadJS (url, raw, extraAttrs = {}) {
-    if (Model.JS_PROMISES[url]) {
+    if (Model.JS_PROMISES[url || raw]) {
       // We've already loaded the script
-      return Model.JS_PROMISES[url];
+      return Model.JS_PROMISES[url || raw];
       // TODO: probably not worth the extra check for
       // document.querySelector(`script[src="${url}"]`)
       // because we have no way of knowing if its onload() has already been
@@ -26,21 +27,21 @@ class Model {
     for (const [key, value] of Object.entries(extraAttrs)) {
       script.setAttribute(key, value);
     }
-    Model.JS_PROMISES[url] = new Promise((resolve, reject) => {
-      script.addEventListener('load', () => { resolve(script); });
-    });
-    if (url) {
+    if (url !== undefined) {
       script.src = url;
-    } else if (raw) {
+    } else if (raw !== undefined) {
       script.innerText = raw;
     } else {
       throw new Error('Either a url or raw argument is required for JS resources');
     }
+    Model.JS_PROMISES[url || raw] = new Promise((resolve, reject) => {
+      script.addEventListener('load', () => { resolve(script); });
+    });
     document.getElementsByTagName('head')[0].appendChild(script);
     return Model.JS_PROMISES[url];
   }
   _loadCSS (url, raw, extraAttrs = {}) {
-    if (url) {
+    if (url !== undefined) {
       if (document.querySelector(`link[href="${url}"]`)) {
         // We've already added this stylesheet
         return Promise.resolve(document.querySelector(`link[href="${url}"]`));
@@ -58,34 +59,38 @@ class Model {
       link.href = url;
       document.getElementsByTagName('head')[0].appendChild(link);
       return loadPromise;
-    } else if (raw) {
+    } else if (raw !== undefined) {
       const style = document.createElement('style');
       style.type = 'text/css';
       for (const [key, value] of Object.keys(extraAttrs)) {
         style.setAttribute(key, value);
       }
-      style.innerText = raw;
+      if (style.styleSheet) {
+        style.styleSheet.cssText = raw;
+      } else {
+        style.innerHTML = raw;
+      }
       document.getElementsByTagName('head')[0].appendChild(style);
       return Promise.resolve(style);
     } else {
       throw new Error('Either a url or raw argument is required for CSS resources');
     }
   }
-  async _loadLESS (url, raw, extraAttrs = {}) {
-    if (url) {
+  async _loadLESS (url, raw, extraAttrs = {}, lessArgs = {}) {
+    if (url !== undefined) {
       if (Model.LESS_PROMISES[url]) {
         return Model.LESS_PROMISES[url];
       } else if (document.querySelector(`link[href="${url}"]`)) {
         return Promise.resolve(document.querySelector(`link[href="${url}"]`));
       }
-    } else if (raw) {
+    } else if (raw !== undefined) {
       if (Model.LESS_PROMISES[raw]) {
         return Model.LESS_PROMISES[raw];
       }
     } else {
       throw new Error('Either a url or raw argument is required for LESS resources');
     }
-    const cssPromise = url ? less.render(`@import '${url}';`) : less.render(raw);
+    const cssPromise = url ? less.render(`@import '${url}';`) : less.render(raw, lessArgs);
     Model.LESS_PROMISES[url || raw] = cssPromise.then(result => {
       // TODO: maybe do magic here to make LESS variables accessible under
       // this.resources?
@@ -103,7 +108,7 @@ class Model {
       p = this._loadCSS(spec.url, spec.raw, spec.extraAttributes || {});
     } else if (spec.type === 'less') {
       // Convert LESS to CSS
-      p = this._loadLESS(spec.url, spec.raw, spec.extraAttributes || {});
+      p = this._loadLESS(spec.url, spec.raw, spec.extraAttributes || {}, spec.lessArgs || {});
     } else if (spec.type === 'fetch') {
       // Raw fetch request
       p = window.fetch(spec.url, spec.init || {});
@@ -135,6 +140,16 @@ class Model {
       }
     }
     return p;
+  }
+  async ensureLessIsLoaded () {
+    if (!window.less || !window.less.render) {
+      if (!window.less) {
+        // Initial settings
+        window.less = { logLevel: 0 };
+        window._ukiLessPromise = this._loadJS('https://cdnjs.cloudflare.com/ajax/libs/less.js/3.11.1/less.min.js');
+      }
+      await window._ukiLessPromise;
+    }
   }
   async _loadResources (specs = []) {
     // uki itself needs d3.js; make sure it exists
@@ -172,11 +187,8 @@ class Model {
       return result;
     });
     // Add and await LESS script if needed
-    if (hasLESSresources && !window.less) {
-      if (!window.less) {
-        window.less = { logLevel: 0 };
-        await this._loadJS('https://cdnjs.cloudflare.com/ajax/libs/less.js/3.11.1/less.min.js');
-      }
+    if (hasLESSresources) {
+      await this.ensureLessIsLoaded();
     }
     // Now do Kahn's algorithm to topologically sort the graph, starting from
     // the resources with no dependencies

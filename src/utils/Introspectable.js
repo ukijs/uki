@@ -1,5 +1,7 @@
-const IntrospectableMixin = function (superclass) {
-  const Introspectable = class extends superclass {
+import createMixinAndDefault from './createMixinAndDefault.js';
+
+const { Introspectable, IntrospectableMixin } = createMixinAndDefault('IntrospectableMixin', Object, (superclass) => {
+  class Introspectable extends superclass {
     get type () {
       return this.constructor.type;
     }
@@ -9,7 +11,7 @@ const IntrospectableMixin = function (superclass) {
     get humanReadableType () {
       return this.constructor.humanReadableType;
     }
-  };
+  }
   Object.defineProperty(Introspectable, 'type', {
     // This can / should be overridden by subclasses that follow a common string
     // pattern, such as RootToken, KeysToken, ParentToken, etc.
@@ -28,10 +30,6 @@ const IntrospectableMixin = function (superclass) {
       return this.type.replace(/([a-z])([A-Z])/g, '$1 $2');
     }
   });
-  Introspectable.prototype._instanceOfIntrospectableMixin = true;
   return Introspectable;
-};
-Object.defineProperty(IntrospectableMixin, Symbol.hasInstance, {
-  value: i => !!i._instanceOfIntrospectableMixin
 });
-export default IntrospectableMixin;
+export { Introspectable, IntrospectableMixin };

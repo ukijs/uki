@@ -1,9 +1,9 @@
 /* globals d3 */
-import { goldenlayout, ui } from '../uki.esm.js';
+import { goldenlayout, ui, View } from '../uki.esm.js';
 
 /* eslint-disable indent */
-class BasicDemoView extends ui.LoadingViewMixin(
-                            ui.EmptyStateViewMixin(goldenlayout.GLView)) {
+class BasicDemoView extends ui.LoadingMixin(
+                            ui.EmptyStateMixin(goldenlayout.GLView)) {
   constructor (options) {
     options.resources = [{
       type: 'text',
@@ -22,9 +22,45 @@ class BasicDemoView extends ui.LoadingViewMixin(
   }
 }
 
-class SvgDemoView extends ui.LoadingViewMixin(
-                          ui.EmptyStateViewMixin(
-                          goldenlayout.SvgViewMixin(goldenlayout.GLView))) {
+class ModalLauncherView extends goldenlayout.GLView {
+  setup () {
+    super.setup({ lessArgs: { modifyVars: {
+      '@contentPadding': '2em'
+    } } });
+    this.d3el.style('padding', '1em');
+    let count = 0;
+    const button = new ui.UkiButton({
+      d3el: this.d3el.append('div'),
+      label: 'Show Modal'
+    });
+    const modalResult = this.d3el.append('div');
+    button.on('click', () => {
+      const buttons = window.modal.defaultButtons;
+      buttons[1].onclick = function () {
+        modalResult.text('Clicked OK');
+        this.hide();
+        count += 1;
+        button.badge = count;
+      };
+      buttons[0].onclick = function () {
+        modalResult.text('Clicked Cancel');
+        this.hide();
+        count -= 1;
+        button.badge = count;
+      };
+      window.modal.show({
+        content: `
+          <div>This is an example modal</div>
+          <div>It accepts arbitrary html</div>
+        `,
+        buttons
+      });
+    });
+  }
+}
+
+class SvgDemoView extends ui.LoadingMixin(
+                          ui.EmptyStateMixin(goldenlayout.SvgView)) {
   getEmptyMessage () {
     return `This is an SVG view`;
   }
@@ -43,9 +79,9 @@ class SvgDemoView extends ui.LoadingViewMixin(
   }
 }
 
-class IFrameView extends ui.LoadingViewMixin(
-                         ui.EmptyStateViewMixin(
-                         goldenlayout.IFrameViewMixin(goldenlayout.GLView))) {
+class IFrameView extends ui.LoadingMixin(
+                         ui.EmptyStateMixin(
+                         goldenlayout.IFrameMixin(goldenlayout.GLView))) {
   constructor (options) {
     options.src = 'https://www.xkcd.com';
     super(options);
@@ -56,36 +92,53 @@ class IFrameView extends ui.LoadingViewMixin(
 }
 
 class RootView extends goldenlayout.GLRootView {
-  constructor () {
-    super({
-      d3el: d3.select('#myView'),
-      viewClassLookup: {
-        BasicDemoView,
-        SvgDemoView,
-        IFrameView
+  constructor (options) {
+    options.viewClassLookup = {
+      BasicDemoView,
+      SvgDemoView,
+      IFrameView,
+      ModalLauncherView
+    };
+    options.glSettings = {
+      settings: {
+        // GoldenLayout has a (really buggy) feature for popping a view out in a
+        // separate browser window; I usually disable this unless there is a
+        // clear user need
+        showPopoutIcon: false
       },
-      glSettings: {
-        settings: {
-          // GoldenLayout has a (really buggy) feature for popping a view out in a
-          // separate browser window; I usually disable this unless there is a
-          // clear user need
-          showPopoutIcon: false
-        },
-        content: [{
-          type: 'row',
-          isCloseable: false,
-          content: [
-            { type: 'component', componentName: 'BasicDemoView', componentState: {} },
-            { type: 'component', componentName: 'SvgDemoView', componentState: {} },
-            { type: 'component', componentName: 'IFrameView', componentState: {} }
-          ]
-        }]
-      }
-    });
+      content: [{
+        type: 'row',
+        isCloseable: false,
+        content: [
+          {
+            type: 'column',
+            isCloseable: false,
+            content: [
+              { type: 'component', componentName: 'BasicDemoView', componentState: {} },
+              { type: 'component', componentName: 'IFrameView', componentState: {} }
+            ]
+          },
+          {
+            type: 'column',
+            isCloseable: false,
+            content: [
+              { type: 'component', componentName: 'SvgDemoView', componentState: {} },
+              { type: 'component', componentName: 'ModalLauncherView', componentState: {} }
+            ]
+          }
+        ]
+      }]
+    };
+    super(options);
   }
 }
 
-window.testView = new RootView();
-window.onload = () => {
-  window.testView.render();
-};
+class ModalView extends ui.ModalMixin(View) {
+  setup () {
+    super.setup();
+    this.contents.text('This is a modal!');
+  }
+}
+
+window.rootView = new RootView({ d3el: d3.select('#glRoot') });
+window.modal = new ModalView({ d3el: d3.select('#modalView') });

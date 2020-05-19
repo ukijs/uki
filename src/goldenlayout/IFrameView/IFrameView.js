@@ -1,13 +1,12 @@
-import FixedGLViewMixin from './FixedGLViewMixin.js';
-import lessStyle from './IFrameViewMixin.less';
+import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
+import FixedGLViewMixin from '../FixedGLView/FixedGLViewMixin.js';
+import { GLView } from '../GLView/GLView.js';
+import { RestylableMixin } from '../../ui/Restylable/Restylable.js';
+import defaultStyle from './style.less';
 
-const IFrameViewMixin = function (superclass) {
-  const IFrameView = class extends FixedGLViewMixin(superclass) {
+const { IFrameView, IFrameMixin } = createMixinAndDefault('IFrameMixin', GLView, superclass => {
+  class IFrameView extends FixedGLViewMixin(RestylableMixin(superclass, defaultStyle, 'IFrameView')) {
     constructor (options) {
-      options.resources = options.resources || [];
-      options.resources.push({
-        type: 'less', raw: lessStyle
-      });
       options.fixedTagType = 'iframe';
       super(options);
       this._src = options.src;
@@ -37,11 +36,7 @@ const IFrameViewMixin = function (superclass) {
           window.open(this._src, '_blank');
         });
     }
-  };
-  IFrameView.prototype._instanceOfIFrameViewMixin = true;
+  }
   return IFrameView;
-};
-Object.defineProperty(IFrameViewMixin, Symbol.hasInstance, {
-  value: i => !!i._instanceOfIFrameViewMixin
 });
-export default IFrameViewMixin;
+export { IFrameView, IFrameMixin };

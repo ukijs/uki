@@ -1,21 +1,20 @@
 /* globals d3 */
-import FixedGLViewMixin from './FixedGLViewMixin.js';
-import lessStyle from './SvgViewMixin.less';
+import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
+import FixedGLViewMixin from '../FixedGLView/FixedGLViewMixin.js';
+import { GLView } from '../GLView/GLView.js';
+import { RestylableMixin } from '../../ui/Restylable/Restylable.js';
+import defaultStyle from './style.less';
 
-const SvgViewMixin = function (superclass) {
-  const SvgView = class extends FixedGLViewMixin(superclass) {
+const { SvgView, SvgViewMixin } = createMixinAndDefault('SvgViewMixin', GLView, superclass => {
+  class SvgView extends FixedGLViewMixin(RestylableMixin(superclass, defaultStyle, 'SvgView', true)) {
     constructor (options) {
-      options.resources = options.resources || [];
-      options.resources.push({
-        type: 'less', raw: lessStyle
-      });
       options.fixedTagType = 'svg';
       super(options);
     }
     setupTab () {
       super.setupTab();
       this.glTabEl
-        .classed('svgTab', true)
+        .classed('SvgTab', true)
         .append('div')
         .classed('downloadIcon', true)
         .attr('title', 'Download')
@@ -65,11 +64,7 @@ const SvgViewMixin = function (superclass) {
       link.node().click();
       link.remove();
     }
-  };
-  SvgView.prototype._instanceOfSvgViewMixin = true;
+  }
   return SvgView;
-};
-Object.defineProperty(SvgViewMixin, Symbol.hasInstance, {
-  value: i => !!i._instanceOfSvgViewMixin
 });
-export default SvgViewMixin;
+export { SvgView, SvgViewMixin };

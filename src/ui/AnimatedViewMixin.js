@@ -1,4 +1,7 @@
 const AnimatedViewMixin = function (superclass) {
+  if (superclass instanceof AnimatedViewMixin) {
+    return superclass;
+  }
   const AnimatedView = class extends superclass {
     constructor (options) {
       super(options);

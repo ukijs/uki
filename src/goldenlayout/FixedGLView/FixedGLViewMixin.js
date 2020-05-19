@@ -1,5 +1,8 @@
-const FixedGLViewMixin = function (superclass) {
-  const FixedGLView = class extends superclass {
+import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
+import { GLView } from '../GLView/GLView.js';
+
+const { FixedGLMixin } = createMixinAndDefault('FixedGLMixin', GLView, superclass => {
+  class FixedGLView extends superclass {
     constructor (options) {
       super(options);
       this.fixedTagType = options.fixedTagType;
@@ -7,7 +10,6 @@ const FixedGLViewMixin = function (superclass) {
     }
     setupD3El () {
       return this.glEl.append(this.fixedTagType)
-        .classed('FixedGLView', true)
         .attr('src', this.src)
         .on('load', () => { this.trigger('viewLoaded'); });
     }
@@ -29,11 +31,7 @@ const FixedGLViewMixin = function (superclass) {
         .attr('width', bounds.width)
         .attr('height', bounds.height);
     }
-  };
-  FixedGLView.prototype._instanceOfFixedGLViewMixin = true;
+  }
   return FixedGLView;
-};
-Object.defineProperty(FixedGLViewMixin, Symbol.hasInstance, {
-  value: i => !!i._instanceOfFixedGLViewMixin
-});
-export default FixedGLViewMixin;
+}, true);
+export default FixedGLMixin;

@@ -1,5 +1,5 @@
-import IntrospectableMixin from './IntrospectableMixin.js';
+import { Introspectable, IntrospectableMixin } from './Introspectable.js';
 import recolorImageFilter from './recolorImageFilter.js';
 
-export { IntrospectableMixin };
+export { Introspectable, IntrospectableMixin };
 export { recolorImageFilter };

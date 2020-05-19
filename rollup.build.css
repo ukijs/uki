@@ -1,0 +1,201 @@
+/*
+Current color scheme
+
+Using ColorBrewer schemes:
+http://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8
+http://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8
+*/
+/*
+Color meanings:
+*/
+/*
+Dummy class that exposes colors for assignment to classes in Javascript:
+*/
+.classColorList {
+  filter: url(#recolorImageTo1B9E77);
+  filter: url(#recolorImageToD95F02);
+  filter: url(#recolorImageTo7570B3);
+  filter: url(#recolorImageToE7298A);
+  filter: url(#recolorImageTo66A61E);
+  filter: url(#recolorImageToE6AB02);
+  filter: url(#recolorImageToA6761D);
+  filter: url(#recolorImageToB3E2CD);
+  filter: url(#recolorImageToFDCDAC);
+  filter: url(#recolorImageToCBD5E8);
+  filter: url(#recolorImageToF4CAE4);
+  filter: url(#recolorImageToE6F5C9);
+  filter: url(#recolorImageToFFF2AE);
+  filter: url(#recolorImageToF1E2CC);
+}
+/*
+Gradients:
+*/
+.UkiButton {
+  position: relative;
+  min-width: 2.5em;
+  min-height: 2.5em;
+  width: -webkit-fit-content;
+  height: -webkit-fit-content;
+  width: fit-content;
+  height: fit-content;
+  background: white;
+  border-radius: 0.5em;
+  cursor: pointer;
+  user-select: none;
+}
+.UkiButton.small {
+  min-width: 1.5em;
+  min-height: 1.5em;
+}
+.UkiButton.tiny {
+  min-width: 1em;
+  min-height: 1em;
+}
+.UkiButton a {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  left: -1px;
+  top: -1px;
+  border: 1px solid #252525;
+  border-radius: 0.5em;
+  overflow: hidden;
+  background: linear-gradient(to bottom, rgba(82, 82, 82, 0.1) 0%, rgba(37, 37, 37, 0) 40%, rgba(0, 0, 0, 0.1) 100%);
+}
+.UkiButton img {
+  position: relative;
+  left: 0.5em;
+  top: 0.5em;
+  width: 1.5em;
+  height: 1.5em;
+  filter: url(#recolorImageTo252525);
+}
+.UkiButton .label {
+  white-space: nowrap;
+  position: relative;
+  vertical-align: top;
+  top: 0.65em;
+  margin: 0px 1em;
+  color: #252525;
+}
+.UkiButton.small img {
+  left: 0.375em;
+  top: 0.375em;
+  width: 0.75em;
+  height: 0.75em;
+}
+.UkiButton.tiny img {
+  left: 0.25em;
+  top: 0.25em;
+  width: 0.5em;
+  height: 0.5em;
+}
+.UkiButton .badge {
+  position: absolute;
+  font-size: 0.65em;
+  font-weight: 600;
+  font-family: 'Source Sans Pro', Arial, sans-serif;
+  right: -0.5em;
+  top: -0.5em;
+  text-align: center;
+  min-width: 0.65em;
+  padding: 0.25em 0.25em 0em 0.25em;
+  background-color: #252525;
+  color: #BDBDBD;
+  border-radius: 0.5em;
+  border: 1px solid #252525;
+}
+.UkiButton.small .label {
+  /* todo */
+}
+.UkiButton:hover a {
+  border-color: #252525;
+  background: linear-gradient(to bottom, rgba(82, 82, 82, 0.25) 0%, rgba(37, 37, 37, 0.25) 40%, rgba(0, 0, 0, 0.5) 100%);
+}
+.UkiButton:active a {
+  border-color: #252525;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(37, 37, 37, 0.25) 40%, rgba(82, 82, 82, 0.5) 100%);
+}
+.UkiButton.selected a {
+  border-color: #252525;
+  background: linear-gradient(to bottom, #525252 0%, #252525 40%, #000000 100%);
+}
+.UkiButton.selected img {
+  filter: url(#recolorImageToF7F7F7);
+}
+.UkiButton.selected .label {
+  color: #F7F7F7;
+}
+.UkiButton.selected:hover a {
+  border-color: #252525;
+  background: linear-gradient(to bottom, #525252 0%, #252525 40%, black 100%);
+}
+.UkiButton.selected:active a {
+  border-color: #252525;
+  background: linear-gradient(to bottom, black 0%, #252525 40%, #525252 100%);
+}
+.UkiButton.disabled,
+.UkiButton.disabled:hover,
+.UkiButton.disabled:active {
+  cursor: default;
+}
+.UkiButton.disabled a,
+.UkiButton.disabled:hover a,
+.UkiButton.disabled:active a {
+  border-color: #D9D9D9;
+  background: #BDBDBD;
+}
+.UkiButton.disabled img,
+.UkiButton.disabled:hover img,
+.UkiButton.disabled:active img {
+  filter: url(#recolorImageToD9D9D9);
+}
+.UkiButton.disabled .label,
+.UkiButton.disabled:hover .label,
+.UkiButton.disabled:active .label {
+  color: #D9D9D9;
+}
+gkQYQAAAAIklEQVR4nGNkYGD4z0AAMBFSAAOETPpPlEmDUREjAxHhBABPvAQLFv3qngAAAABJRU5ErkJggg==");
+}
+.GLRootView .lm_controls .lm_close {
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAKUlEQVR4nGNgYGD4z4Af/Mdg4FKASwCnDf8JKSBoAtEmEXQTQd8RDCcA6+4Q8OvIgasAAAAASUVORK5CYII=");
+}
+.GLRootView .lm_controls .lm_dock {
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1MAAA6mAAADqYAAAXb5JfxUYAAAC6SURBVHjavNRRFYIwFAbgLwJRaCBRaCIRbGAEaSARaKANpMF8GedM3BSV4wMvY/u4+++GEIItns8m0/wMoUHA8WsIFS7oMOawtVCPPkGfsFeLa+ywx4RqUeEDVgIuMY8R11zIcZthfpfLYsKQVpCZc1p+oFTRhLbQuVvMrHqbUQmLVXQftT/JoE3GhtKhLCFtRLq5sphNQL0KSpB2sc0zrquuyBLJZFa/hUpI2vZVtx+HErL5b+Qv0H0Axmb86JFNd6MAAAAASUVORK5CYII=");
+  transform: rotate(-45deg);
+  transition: transform 300ms;
+}
+.GLRootView .lm_stack.lm_docked .lm_controls .lm_dock {
+  transform: rotate(0deg);
+}
+.GLRootView .lm_stack.lm_docked > .lm_items {
+  border-color: #BDBDBD;
+  border-image: linear-gradient(to right, #BDBDBD 1%, white 100%);
+  box-shadow: 2px 2px 2px -2px rgba(37, 37, 37, 0.2);
+}
+.GLRootView .lm_maximised .lm_header {
+  background-color: white;
+}
+.GLRootView .lm_maximised .lm_controls .lm_maximise {
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAJklEQVR4nGP8//8/AyHARFDFUFbEwsDAwMDIyIgzHP7//89IlEkApSkHEScJTKoAAAAASUVORK5CYII=");
+}
+.GLRootView .lm_transition_indicator {
+  background-color: #252525;
+  border: 1px dashed #BDBDBD;
+}
+.GLRootView .lm_popin {
+  cursor: pointer;
+}
+.GLRootView .lm_popin .lm_bg {
+  background: #252525;
+  opacity: 0.7;
+}
+.GLRootView .lm_popin .lm_icon {
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAAJCAYAAADpeqZqAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH5AIMBA8Y4uozqQAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUHAAAAQ0lEQVQY072OMQ6AMAzEzhH//7I7oKKKoSULXjI5Z5KokgXAbEANoMq8WwGs3FOcvq/Ul5w311zqSNVdefJ+kUjSzhteChsRI/jXegAAAABJRU5ErkJggg==");
+  background-position: center center;
+  background-repeat: no-repeat;
+  opacity: 0.7;
+}
+.GLRootView .lm_popin:hover .lm_icon {
+  opacity: 1;
+}
