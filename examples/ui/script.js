@@ -28,17 +28,33 @@ class BasicDemoView extends ui.LoadingMixin(
 }
 
 class ModalLauncherView extends goldenlayout.GLView {
+  get title () {
+    return 'Buttons and Modals';
+  }
   setup () {
     super.setup({ lessArgs: { modifyVars: {
       '@contentPadding': '2em'
     } } });
-    this.d3el.style('padding', '1em');
+    this.d3el.style('padding', '1em')
+      .style('display', 'flex')
+      .style('flex-direction', 'row')
+      .style('justify-content', 'space-around')
+      .style('width', 'calc(100% - 2em)');
+
+    for (const size of [null, 'small', 'tiny']) {
+      this.createButton(size);
+    }
+  }
+  createButton (size) {
+    const container = this.d3el.append('div');
     let count = 0;
     const button = new ui.UkiButton({
-      d3el: this.d3el.append('div'),
-      label: 'Show Modal'
+      d3el: container.append('div'),
+      label: 'Show Modal',
+      size: size
     });
-    const modalResult = this.d3el.append('div');
+    const modalResult = container.append('div')
+      .style('margin-top', '1em');
     button.on('click', () => {
       const buttons = window.modal.defaultButtons;
       buttons[1].onclick = function () {
@@ -65,7 +81,7 @@ class ModalLauncherView extends goldenlayout.GLView {
 }
 
 class SvgDemoView extends ui.LoadingMixin(
-                          ui.EmptyStateMixin(goldenlayout.SvgView)) {
+                          ui.EmptyStateMixin(goldenlayout.SvgGLView)) {
   getEmptyMessage () {
     return `This is an SVG view`;
   }
@@ -86,7 +102,7 @@ class SvgDemoView extends ui.LoadingMixin(
 
 class IFrameView extends ui.LoadingMixin(
                          ui.EmptyStateMixin(
-                         goldenlayout.IFrameMixin(goldenlayout.GLView))) {
+                         goldenlayout.IFrameGLMixin(goldenlayout.GLView))) {
   constructor (options) {
     options.src = 'https://www.xkcd.com';
     super(options);

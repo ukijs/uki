@@ -40,5 +40,5 @@ const { EmptyStateView, EmptyStateMixin } = createMixinAndDefault('EmptyStateMix
     }
   }
   return EmptyStateView;
-});
+}, true);
 export { EmptyStateView, EmptyStateMixin };

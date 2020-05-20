@@ -84,6 +84,6 @@ const { GLRootView, GLRootMixin } = createMixinAndDefault('GLRootMixin', View, s
     }
   }
   return GLRootView;
-});
+}, true);
 
 export { GLRootView, GLRootMixin };

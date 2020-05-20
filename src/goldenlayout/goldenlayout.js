@@ -1,11 +1,9 @@
 import { GLRootView, GLRootMixin } from './GLRoot/GLRoot.js';
-import { GLView, GLViewMixin } from './GLView/GLView.js';
-import FixedGLViewMixin from './FixedGLView/FixedGLViewMixin.js';
-import { SvgView, SvgViewMixin } from './SvgView/SvgView.js';
-import { IFrameView, IFrameMixin } from './IFrameView/IFrameView.js';
+import { GLView, GLMixin } from './GLView/GLView.js';
+import { SvgGLView, SvgGLMixin } from './SvgGLView/SvgGLView.js';
+import { IFrameGLView, IFrameGLMixin } from './IFrameGLView/IFrameGLView.js';
 
 export { GLRootView, GLRootMixin };
-export { GLView, GLViewMixin };
-export { FixedGLViewMixin };
-export { SvgView, SvgViewMixin };
-export { IFrameView, IFrameMixin };
+export { GLView, GLMixin };
+export { SvgGLView, SvgGLMixin };
+export { IFrameGLView, IFrameGLMixin };

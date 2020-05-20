@@ -39,5 +39,5 @@ const { LoadingView, LoadingMixin } = createMixinAndDefault('LoadingMixin', View
     }
   }
   return LoadingView;
-});
+}, true);
 export { LoadingView, LoadingMixin };

@@ -60,6 +60,9 @@ class Model {
       document.getElementsByTagName('head')[0].appendChild(link);
       return loadPromise;
     } else if (raw !== undefined) {
+      if (Model.RAW_CSS[raw]) {
+        return;
+      }
       const style = document.createElement('style');
       style.type = 'text/css';
       for (const [key, value] of Object.keys(extraAttrs)) {
@@ -70,6 +73,7 @@ class Model {
       } else {
         style.innerHTML = raw;
       }
+      Model.RAW_CSS[raw] = true;
       document.getElementsByTagName('head')[0].appendChild(style);
       return Promise.resolve(style);
     } else {
@@ -290,6 +294,7 @@ class Model {
 }
 Model.LESS_PROMISES = {};
 Model.JS_PROMISES = {};
+Model.RAW_CSS = {};
 
 /**
  * View classes
@@ -548,7 +553,7 @@ const { GLRootView, GLRootMixin } = createMixinAndDefault('GLRootMixin', View, s
     }
   }
   return GLRootView;
-});
+}, true);
 
 const { Introspectable, IntrospectableMixin } = createMixinAndDefault('IntrospectableMixin', Object, (superclass) => {
   class Introspectable extends superclass {
@@ -583,11 +588,11 @@ const { Introspectable, IntrospectableMixin } = createMixinAndDefault('Introspec
   return Introspectable;
 });
 
-var defaultStyle$1 = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nhttp://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8\nhttp://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8\n*/\n/*\nColor meanings:\n*/\n/*\nDummy class that exposes colors for assignment to classes in Javascript:\n*/\n.classColorList {\n  filter: url(#recolorImageTo1B9E77);\n  filter: url(#recolorImageToD95F02);\n  filter: url(#recolorImageTo7570B3);\n  filter: url(#recolorImageToE7298A);\n  filter: url(#recolorImageTo66A61E);\n  filter: url(#recolorImageToE6AB02);\n  filter: url(#recolorImageToA6761D);\n  filter: url(#recolorImageToB3E2CD);\n  filter: url(#recolorImageToFDCDAC);\n  filter: url(#recolorImageToCBD5E8);\n  filter: url(#recolorImageToF4CAE4);\n  filter: url(#recolorImageToE6F5C9);\n  filter: url(#recolorImageToFFF2AE);\n  filter: url(#recolorImageToF1E2CC);\n}\n/*\nGradients:\n*/\n.GLView .scrollArea {\n  position: absolute;\n  top: 0.25em;\n  left: 0.25em;\n  right: 0.25em;\n  bottom: 0.25em;\n  overflow: auto;\n}\n";
+var defaultStyle$1 = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nhttp://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8\nhttp://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8\n*/\n/*\nColor meanings:\n*/\n/*\nDummy class that exposes colors for assignment to classes in Javascript:\n*/\n.classColorList {\n  filter: url(#recolorImageTo1B9E77);\n  filter: url(#recolorImageToD95F02);\n  filter: url(#recolorImageTo7570B3);\n  filter: url(#recolorImageToE7298A);\n  filter: url(#recolorImageTo66A61E);\n  filter: url(#recolorImageToE6AB02);\n  filter: url(#recolorImageToA6761D);\n  filter: url(#recolorImageToB3E2CD);\n  filter: url(#recolorImageToFDCDAC);\n  filter: url(#recolorImageToCBD5E8);\n  filter: url(#recolorImageToF4CAE4);\n  filter: url(#recolorImageToE6F5C9);\n  filter: url(#recolorImageToFFF2AE);\n  filter: url(#recolorImageToF1E2CC);\n}\n/*\nGradients:\n*/\n.GLView.scrollArea {\n  position: absolute;\n  top: 0.25em;\n  left: 0.25em;\n  right: 0.25em;\n  bottom: 0.25em;\n  overflow: auto;\n}\n";
 
 /* globals d3 */
 
-const { GLView, GLViewMixin } = createMixinAndDefault('GLViewMixin', View, superclass => {
+const { GLView, GLMixin } = createMixinAndDefault('GLMixin', View, superclass => {
   class GLView extends IntrospectableMixin(RestylableMixin(superclass, defaultStyle$1, 'GLView')) {
     constructor (options) {
       super(options);
@@ -646,67 +651,49 @@ const { GLView, GLViewMixin } = createMixinAndDefault('GLViewMixin', View, super
     }
   }
   return GLView;
-});
+}, true);
 
-const { FixedGLMixin } = createMixinAndDefault('FixedGLMixin', GLView, superclass => {
-  class FixedGLView extends superclass {
-    constructor (options) {
-      super(options);
-      this.fixedTagType = options.fixedTagType;
-      this._previousBounds = { width: 0, height: 0 };
-    }
-    setupD3El () {
-      return this.glEl.append(this.fixedTagType)
-        .attr('src', this.src)
-        .on('load', () => { this.trigger('viewLoaded'); });
-    }
-    getBounds (el = this.glEl) {
-      // Don't rely on non-dynamic width / height for available space; use
-      // this.glEl instead of this.d3el
-      return super.getBounds(el);
+/* globals d3 */
+
+const { ParentSizeView, ParentSizeMixin } = createMixinAndDefault('ParentSizeMixin', View, superclass => {
+  class ParentSizeView extends superclass {
+    getBounds (parent = d3.select(this.d3el.node().parentNode)) {
+      // Temporarily set this element's size to 0,0 so that it doesn't influence
+      // it's parent's natural size
+      const previousBounds = {
+        width: this.d3el.attr('width'),
+        height: this.d3el.attr('height')
+      };
+      this.d3el
+        .attr('width', 0)
+        .attr('height', 0);
+      const bounds = parent.node().getBoundingClientRect();
+      // Restore the bounds
+      this.d3el
+        .attr('width', previousBounds.width)
+        .attr('height', previousBounds.height);
+      return bounds;
     }
     draw () {
       super.draw();
-
       const bounds = this.getBounds();
-      if (this._previousBounds.width !== bounds.width ||
-          this._previousBounds.height !== bounds.height) {
-        this.trigger('viewResized');
-      }
-      this._previousBounds = bounds;
       this.d3el
         .attr('width', bounds.width)
         .attr('height', bounds.height);
     }
   }
-  return FixedGLView;
+  return ParentSizeView;
 }, true);
-
-var defaultStyle$2 = ".lm_header .lm_tab.SvgTab {\n  padding-right: 36px;\n}\n.lm_header .lm_tab.SvgTab .downloadIcon {\n  position: absolute;\n  width: 11px;\n  height: 11px;\n  background-image: url(\"data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDE5LjIuMSwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IgoJIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA1MTIgNTEyOyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+CjxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI+Cgkuc3Qwe2ZpbGw6IzAwMDAwMDt9Cjwvc3R5bGU+CjxnPgoJPHBhdGggY2xhc3M9InN0MCIgZD0iTTYsMzU4LjVjNy43LTIxLjIsMTQuNC0yNS44LDM3LjQtMjUuOGM0MS40LDAsODIuOC0wLjEsMTI0LjIsMC4yYzQuMSwwLDksMi4yLDEyLDVjMTEuMywxMC42LDIyLDIxLjksMzMsMzIuOQoJCWMyNi4zLDI2LjEsNjAuMywyNi4yLDg2LjcsMC4xYzExLjItMTEuMSwyMi4xLTIyLjUsMzMuNy0zMy4zYzIuOC0yLjcsNy41LTQuNywxMS40LTQuN2M0MS40LTAuMyw4Mi44LTAuMiwxMjQuMi0wLjIKCQljMjMuMSwwLDI5LjcsNC42LDM3LjQsMjUuOGMwLDM0LjIsMCw2OC4zLDAsMTAyLjVjLTcuNywyMC44LTE0LjIsMjUuMS0zNywyNS4xYy0xNDIsMC0yODQsMC00MjYsMGMtMjIuOCwwLTI5LjMtNC40LTM3LTI1LjEKCQlDNiw0MjYuOCw2LDM5Mi43LDYsMzU4LjV6IE0zOTAsNDI4LjZjLTAuMS0xMC4xLTguNi0xOC43LTE4LjYtMTguOWMtMTAuMi0wLjItMTkuMyw4LjktMTkuMiwxOS4xYzAuMSwxMC40LDkuMSwxOSwxOS41LDE4LjcKCQlDMzgxLjgsNDQ3LjMsMzkwLjEsNDM4LjcsMzkwLDQyOC42eiBNNDQ3LjksNDQ3LjdjOS45LDAsMTguOC04LjcsMTkuMS0xOC42YzAuMy0xMC05LTE5LjQtMTkuMS0xOS40Yy0xMC4xLDAtMTkuMyw5LjQtMTkuMSwxOS40CgkJQzQyOS4xLDQzOSw0MzgsNDQ3LjcsNDQ3LjksNDQ3Ljd6Ii8+Cgk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMzEzLjUsMTc5LjNjMTkuOSwwLDM4LjgsMCw1Ny42LDBjNS40LDAsMTAuOSwwLjEsMTYuMywwYzkuNC0wLjMsMTYuNywyLjgsMjAuNiwxMS45CgkJYzMuOSw5LjMsMC40LDE2LjMtNi4zLDIyLjljLTQxLjEsNDAuOS04Miw4MS45LTEyMywxMjIuOWMtMjAuMywyMC4zLTI1LjIsMjAuMy00NS40LDAuMWMtNDAuOC00MC44LTgxLjYtODEuNi0xMjIuNS0xMjIuMwoJCWMtNi43LTYuNy0xMS0xMy42LTctMjMuNGMzLjctOC44LDEwLjUtMTIuMSwxOS43LTEyLjFjMjIsMC4xLDQ0LDAsNjYsMGMyLjgsMCw1LjUsMCw4LjksMGMwLTMuOSwwLTYuNywwLTkuNQoJCWMwLTQwLjEsMC04MC4yLDAtMTIwLjNjMC0xNi40LDcuMi0yMy41LDIzLjctMjMuNmMyMi44LTAuMSw0NS41LTAuMSw2OC4zLDBjMTUuOSwwLjEsMjMsNy40LDIzLjEsMjMuNGMwLDQwLjEsMCw4MC4yLDAsMTIwLjMKCQlDMzEzLjUsMTcyLjUsMzEzLjUsMTc1LjMsMzEzLjUsMTc5LjN6Ii8+CjwvZz4KPC9zdmc+Cg==\");\n  background-position: center center;\n  background-repeat: no-repeat;\n  background-size: 11px 11px;\n  top: 4px;\n  right: 6px;\n  margin-right: 13px;\n  opacity: 0.4;\n}\n.lm_header .lm_tab.SvgTab .downloadIcon:hover {\n  opacity: 1;\n}\n";
 
 /* globals d3 */
 
-const { SvgView, SvgViewMixin } = createMixinAndDefault('SvgViewMixin', GLView, superclass => {
-  class SvgView extends FixedGLMixin(RestylableMixin(superclass, defaultStyle$2, 'SvgView', true)) {
+const { SvgView, SvgMixin } = createMixinAndDefault('SvgMixin', View, superclass => {
+  class SvgView extends ParentSizeMixin(superclass) {
     constructor (options) {
       options.fixedTagType = 'svg';
       super(options);
     }
-    setupTab () {
-      super.setupTab();
-      this.glTabEl
-        .classed('SvgTab', true)
-        .append('div')
-        .classed('downloadIcon', true)
-        .attr('title', 'Download')
-        .on('mousedown', () => {
-          d3.event.stopPropagation();
-        })
-        .on('mouseup', () => {
-          this.downloadSvg();
-        });
-    }
-    downloadSvg () {
+    download () {
       // Adapted from https://stackoverflow.com/a/37387449/1058935
       const containerElements = ['svg', 'g'];
       const relevantStyles = {
@@ -750,19 +737,49 @@ const { SvgView, SvgViewMixin } = createMixinAndDefault('SvgViewMixin', GLView, 
     }
   }
   return SvgView;
-});
+}, true);
 
-var defaultStyle$3 = ".IFrameView {\n  border: none;\n}\n.lm_header .lm_tab.IFrameTab {\n  padding-right: 36px;\n}\n.lm_header .lm_tab.IFrameTab .linkIcon {\n  position: absolute;\n  width: 11px;\n  height: 11px;\n  background-image: url(\"data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhLS0gQ3JlYXRlZCB3aXRoIElua3NjYXBlIChodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy8pIC0tPgoKPHN2ZwogICB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iCiAgIHhtbG5zOmNjPSJodHRwOi8vY3JlYXRpdmVjb21tb25zLm9yZy9ucyMiCiAgIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyIKICAgeG1sbnM6c3ZnPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIKICAgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIgogICB4bWxuczpzb2RpcG9kaT0iaHR0cDovL3NvZGlwb2RpLnNvdXJjZWZvcmdlLm5ldC9EVEQvc29kaXBvZGktMC5kdGQiCiAgIHhtbG5zOmlua3NjYXBlPSJodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy9uYW1lc3BhY2VzL2lua3NjYXBlIgogICB3aWR0aD0iNTEyIgogICBoZWlnaHQ9IjUxMiIKICAgdmlld0JveD0iMCAwIDUxMiA1MTIiCiAgIHZlcnNpb249IjEuMSIKICAgaWQ9InN2ZzgiCiAgIGlua3NjYXBlOnZlcnNpb249IjAuOTIuNCAoNWRhNjg5YzMxMywgMjAxOS0wMS0xNCkiCiAgIHNvZGlwb2RpOmRvY25hbWU9Imxpbmsuc3ZnIj4KICA8ZGVmcwogICAgIGlkPSJkZWZzMiIgLz4KICA8c29kaXBvZGk6bmFtZWR2aWV3CiAgICAgaWQ9ImJhc2UiCiAgICAgcGFnZWNvbG9yPSIjZmZmZmZmIgogICAgIGJvcmRlcmNvbG9yPSIjNjY2NjY2IgogICAgIGJvcmRlcm9wYWNpdHk9IjEuMCIKICAgICBpbmtzY2FwZTpwYWdlb3BhY2l0eT0iMC4wIgogICAgIGlua3NjYXBlOnBhZ2VzaGFkb3c9IjIiCiAgICAgaW5rc2NhcGU6em9vbT0iMC43IgogICAgIGlua3NjYXBlOmN4PSI5NTEuNjcyNDQiCiAgICAgaW5rc2NhcGU6Y3k9Ijg3OS4zMDQ2OSIKICAgICBpbmtzY2FwZTpkb2N1bWVudC11bml0cz0icHgiCiAgICAgaW5rc2NhcGU6Y3VycmVudC1sYXllcj0ibGF5ZXIxIgogICAgIHNob3dncmlkPSJ0cnVlIgogICAgIHVuaXRzPSJweCIKICAgICBpbmtzY2FwZTp3aW5kb3ctd2lkdGg9IjMzNjAiCiAgICAgaW5rc2NhcGU6d2luZG93LWhlaWdodD0iMTc4MCIKICAgICBpbmtzY2FwZTp3aW5kb3cteD0iNzAzMCIKICAgICBpbmtzY2FwZTp3aW5kb3cteT0iLTEyIgogICAgIGlua3NjYXBlOndpbmRvdy1tYXhpbWl6ZWQ9IjEiCiAgICAgaW5rc2NhcGU6cGFnZWNoZWNrZXJib2FyZD0iZmFsc2UiPgogICAgPGlua3NjYXBlOmdyaWQKICAgICAgIHR5cGU9Inh5Z3JpZCIKICAgICAgIGlkPSJncmlkMTM1OCIKICAgICAgIHNwYWNpbmd4PSIyMCIKICAgICAgIHNwYWNpbmd5PSIyMCIgLz4KICA8L3NvZGlwb2RpOm5hbWVkdmlldz4KICA8bWV0YWRhdGEKICAgICBpZD0ibWV0YWRhdGE1Ij4KICAgIDxyZGY6UkRGPgogICAgICA8Y2M6V29yawogICAgICAgICByZGY6YWJvdXQ9IiI+CiAgICAgICAgPGRjOmZvcm1hdD5pbWFnZS9zdmcreG1sPC9kYzpmb3JtYXQ+CiAgICAgICAgPGRjOnR5cGUKICAgICAgICAgICByZGY6cmVzb3VyY2U9Imh0dHA6Ly9wdXJsLm9yZy9kYy9kY21pdHlwZS9TdGlsbEltYWdlIiAvPgogICAgICAgIDxkYzp0aXRsZT48L2RjOnRpdGxlPgogICAgICA8L2NjOldvcms+CiAgICA8L3JkZjpSREY+CiAgPC9tZXRhZGF0YT4KICA8ZwogICAgIGlua3NjYXBlOmxhYmVsPSJMYXllciAxIgogICAgIGlua3NjYXBlOmdyb3VwbW9kZT0ibGF5ZXIiCiAgICAgaWQ9ImxheWVyMSIKICAgICB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLC01NzkuMjUwMDEpIj4KICAgIDxnCiAgICAgICBpZD0iZzgzNyIKICAgICAgIHRyYW5zZm9ybT0ibWF0cml4KDEuOTI0NDY4OSwwLDAsMS45MjQ0Njg5LC0yMDMzLjI4ODQsLTgxNC45NDQ5MikiCiAgICAgICBzdHlsZT0ic3Ryb2tlLXdpZHRoOjAuNTE5NjIzODgiPgogICAgICA8cGF0aAogICAgICAgICBpZD0icGF0aDgzMSIKICAgICAgICAgZD0ibSAxMjc3LjcyOTgsOTg1LjEwMjIxIGMgNS44NzU0LC0yLjI2NzIxIDEwLjA1OTMsLTYuNDczOTEgMTIuMTA5NiwtMTIuMTc1NTkgMS41NzA2LC00LjM2NzcxIDEuNzAzMiwtOS42MjAwNCAxLjQ0NDksLTU3LjI0Mjc5IC0wLjI3NjgsLTUxLjA1MTY1IC0wLjMzOTEsLTUyLjUyNjA4IC0yLjM2NCwtNTUuOTMzODIgLTEuMTQzOCwtMS45MjUgLTMuOTkxMywtNC45NjI1IC02LjMyNzcsLTYuNzUgLTMuNzQ2MiwtMi44NjYgLTQuOTc3NCwtMy4yNDc0MSAtMTAuNDIwMywtMy4yMjgwNCAtOC4zMDE0LDAuMDI5NSAtMTMuNzQ1NSwyLjU4NTc0IC0xNy4zNjE4LDguMTUyMDYgbCAtMi44MTA1LDQuMzI1OTggLTAuMzA5Miw0Mi4yNSAtMC4zMDkzLDQyLjI1IEggMTE3NS40NDA4IDEwOTkuNSB2IC03Ni41IC03Ni41IGwgMzguNzUsLTAuMDA2IGMgMjMuNTY5NywtMC4wMDMgNDAuMjA2OSwtMC40MTAxOSA0Mi40Njg5LC0xLjAzODQzIDE4LjYxMDEsLTUuMTY4NTIgMTguMDg2OSwtMzIuNzE1MjkgLTAuNzE4OSwtMzcuODUyMjEgLTUuOTM3NSwtMS42MjE4NyAtMTAwLjQxMDQsLTEuNTA5NCAtMTA1Ljg4NCwwLjEyNjA2IC02LjM0MDcsMS44OTQ1NSAtMTIuMTczMyw4LjMyMDQ0IC0xMy41NDM2LDE0LjkyMTM0IC0wLjc5NCwzLjgyNDg1IC0xLjA0MDUsMzMuOTMxMTYgLTAuODQ2NCwxMDMuMzcyNjggbCAwLjI3NCw5Ny45NzY1NiAyLjUsNC40MTE0MiBjIDEuMzc1LDIuNDI2MjggMy42NTEsNS4yNjIwNyA1LjA1NzgsNi4zMDE3NyA2LjQ4OTQsNC43OTU5NSA0LjIxNTEsNC42OTYyMyAxMDguMTcyLDQuNzQyOTIgODguNDM5LDAuMDM5NyA5OC4xMzU3LC0wLjExMjc2IDEwMiwtMS42MDM5MSB6IgogICAgICAgICBzdHlsZT0iZmlsbDojMDAwMDAwO3N0cm9rZS13aWR0aDowLjUxOTYyMzg4IgogICAgICAgICBpbmtzY2FwZTpjb25uZWN0b3ItY3VydmF0dXJlPSIwIiAvPgogICAgICA8cGF0aAogICAgICAgICBpZD0icGF0aDgyNyIKICAgICAgICAgZD0ibSAxMTkxLjc5OTcsODgwLjEyOTgxIGMgMy45NjgyLC0yLjAwODkzIDExLjU1NDIsLTkuMjA4NzIgNTMuMjkyNSwtNTAuNTc5MjMgMTguMjAwNywtMTguMDQwMzEgMzMuMzg4MiwtMzIuODAwNTcgMzMuNzUsLTMyLjgwMDU3IDAuMzYxOCwwIDAuNjY3Nyw2LjQxMjUgMC42Nzk4LDE0LjI1IDAuMDI1LDE2LjE3NzcyIDEuMDI4NiwxOS42NzU5IDcuMzc5LDI1LjcxODYyIDMuMzIyMywzLjE2MTIzIDQuMjcwNCwzLjUwMzk0IDEwLjY5OTEsMy44NjcxOSA1LjI0NDMsMC4yOTYzNCA4LjA0ODYsLTAuMDUgMTAuOTMyMSwtMS4zNTAzMiA0LjY2OTcsLTIuMTA1NzggOC45MzU1LC03LjkyOTc3IDEwLjA1NzksLTEzLjczMjExIDEuMzE2NywtNi44MDY0NSAxLjEwNTcsLTc3LjA5MDI5IC0wLjI0NzYsLTgyLjQ2NDQ5IC0xLjUyMTQsLTYuMDQyMDEgLTguMDYzMSwtMTIuODI4MjcgLTEzLjQ2NjYsLTEzLjk2OTk1IC0yLjEzMTcsLTAuNDUwNDIgLTIyLjEwMDksLTAuODE4OTQgLTQ0LjM3NTksLTAuODE4OTQgSCAxMjIwIGwgLTQuNDU1NiwyLjUgYyAtNS42NDksMy4xNjk2NCAtOS44NTUxLDkuMTQzOCAtMTAuNjYyNSwxNS4xNDQ3NCAtMC44OTMzLDYuNjM5NTIgMi44ODE0LDE0LjY3NjkzIDguNzAzNiwxOC41MzIzOCA0LjE0MjIsMi43NDI5MyA0LjcyODgsMi44MzcwNCAyMC43MTQ5LDMuMzIyODggbCAxNi40NTIsMC41IC00MS43Njc3LDQxIGMgLTQzLjgzMDcsNDMuMDI1IC00NS41MTI3LDQ0Ljk5ODE2IC00NS40NjI3LDUzLjMzMjkxIDAuMDI0LDQuMDU1ODggMi44NzAyLDExLjA5MDI3IDUuNjY5OSwxNC4wMTQ1NiA0Ljg5NDMsNS4xMTIwNyAxNi4wNDU3LDYuODU0NDIgMjIuNjA3OCwzLjUzMjMzIHoiCiAgICAgICAgIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjAuNTE5NjIzODgiCiAgICAgICAgIGlua3NjYXBlOmNvbm5lY3Rvci1jdXJ2YXR1cmU9IjAiIC8+CiAgICA8L2c+CiAgPC9nPgo8L3N2Zz4K\");\n  background-position: center center;\n  background-repeat: no-repeat;\n  background-size: 11px 11px;\n  top: 4px;\n  right: 6px;\n  margin-right: 13px;\n  opacity: 0.4;\n}\n.lm_header .lm_tab.IFrameTab .linkIcon:hover {\n  opacity: 1;\n}\n";
+var defaultStyle$2 = ".lm_header .lm_tab.SvgTab {\n  padding-right: 36px;\n}\n.lm_header .lm_tab.SvgTab .downloadIcon {\n  position: absolute;\n  width: 11px;\n  height: 11px;\n  background-image: url(\"data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDE5LjIuMSwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IgoJIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA1MTIgNTEyOyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+CjxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI+Cgkuc3Qwe2ZpbGw6IzAwMDAwMDt9Cjwvc3R5bGU+CjxnPgoJPHBhdGggY2xhc3M9InN0MCIgZD0iTTYsMzU4LjVjNy43LTIxLjIsMTQuNC0yNS44LDM3LjQtMjUuOGM0MS40LDAsODIuOC0wLjEsMTI0LjIsMC4yYzQuMSwwLDksMi4yLDEyLDVjMTEuMywxMC42LDIyLDIxLjksMzMsMzIuOQoJCWMyNi4zLDI2LjEsNjAuMywyNi4yLDg2LjcsMC4xYzExLjItMTEuMSwyMi4xLTIyLjUsMzMuNy0zMy4zYzIuOC0yLjcsNy41LTQuNywxMS40LTQuN2M0MS40LTAuMyw4Mi44LTAuMiwxMjQuMi0wLjIKCQljMjMuMSwwLDI5LjcsNC42LDM3LjQsMjUuOGMwLDM0LjIsMCw2OC4zLDAsMTAyLjVjLTcuNywyMC44LTE0LjIsMjUuMS0zNywyNS4xYy0xNDIsMC0yODQsMC00MjYsMGMtMjIuOCwwLTI5LjMtNC40LTM3LTI1LjEKCQlDNiw0MjYuOCw2LDM5Mi43LDYsMzU4LjV6IE0zOTAsNDI4LjZjLTAuMS0xMC4xLTguNi0xOC43LTE4LjYtMTguOWMtMTAuMi0wLjItMTkuMyw4LjktMTkuMiwxOS4xYzAuMSwxMC40LDkuMSwxOSwxOS41LDE4LjcKCQlDMzgxLjgsNDQ3LjMsMzkwLjEsNDM4LjcsMzkwLDQyOC42eiBNNDQ3LjksNDQ3LjdjOS45LDAsMTguOC04LjcsMTkuMS0xOC42YzAuMy0xMC05LTE5LjQtMTkuMS0xOS40Yy0xMC4xLDAtMTkuMyw5LjQtMTkuMSwxOS40CgkJQzQyOS4xLDQzOSw0MzgsNDQ3LjcsNDQ3LjksNDQ3Ljd6Ii8+Cgk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMzEzLjUsMTc5LjNjMTkuOSwwLDM4LjgsMCw1Ny42LDBjNS40LDAsMTAuOSwwLjEsMTYuMywwYzkuNC0wLjMsMTYuNywyLjgsMjAuNiwxMS45CgkJYzMuOSw5LjMsMC40LDE2LjMtNi4zLDIyLjljLTQxLjEsNDAuOS04Miw4MS45LTEyMywxMjIuOWMtMjAuMywyMC4zLTI1LjIsMjAuMy00NS40LDAuMWMtNDAuOC00MC44LTgxLjYtODEuNi0xMjIuNS0xMjIuMwoJCWMtNi43LTYuNy0xMS0xMy42LTctMjMuNGMzLjctOC44LDEwLjUtMTIuMSwxOS43LTEyLjFjMjIsMC4xLDQ0LDAsNjYsMGMyLjgsMCw1LjUsMCw4LjksMGMwLTMuOSwwLTYuNywwLTkuNQoJCWMwLTQwLjEsMC04MC4yLDAtMTIwLjNjMC0xNi40LDcuMi0yMy41LDIzLjctMjMuNmMyMi44LTAuMSw0NS41LTAuMSw2OC4zLDBjMTUuOSwwLjEsMjMsNy40LDIzLjEsMjMuNGMwLDQwLjEsMCw4MC4yLDAsMTIwLjMKCQlDMzEzLjUsMTcyLjUsMzEzLjUsMTc1LjMsMzEzLjUsMTc5LjN6Ii8+CjwvZz4KPC9zdmc+Cg==\");\n  background-position: center center;\n  background-repeat: no-repeat;\n  background-size: 11px 11px;\n  top: 4px;\n  right: 6px;\n  margin-right: 13px;\n  opacity: 0.4;\n}\n.lm_header .lm_tab.SvgTab .downloadIcon:hover {\n  opacity: 1;\n}\n";
 
 /* globals d3 */
 
-const { IFrameView, IFrameMixin } = createMixinAndDefault('IFrameMixin', GLView, superclass => {
-  class IFrameView extends FixedGLMixin(RestylableMixin(superclass, defaultStyle$3, 'IFrameView')) {
+const { SvgGLView, SvgGLMixin } = createMixinAndDefault('SvgGLMixin', GLView, superclass => {
+  class SvgGLView extends SvgMixin(RestylableMixin(superclass, defaultStyle$2, 'SvgGLView', true)) {
+    setupD3El () {
+      return this.glEl.append('svg')
+        .attr('src', this.src)
+        .on('load', () => { this.trigger('viewLoaded'); });
+    }
+    setupTab () {
+      super.setupTab();
+      this.glTabEl
+        .classed('SvgTab', true)
+        .append('div')
+        .classed('downloadIcon', true)
+        .attr('title', 'Download')
+        .on('mousedown', () => {
+          d3.event.stopPropagation();
+        })
+        .on('mouseup', () => {
+          this.download();
+        });
+    }
+  }
+  return SvgGLView;
+}, true);
+
+const { IFrameView, IFrameMixin } = createMixinAndDefault('IFrameMixin', View, superclass => {
+  class IFrameView extends ParentSizeMixin(superclass) {
     constructor (options) {
-      options.fixedTagType = 'iframe';
       super(options);
       this._src = options.src;
       this.frameLoaded = !this._src; // We are loaded if no src is initially provided
+    }
+    setup () {
+      super.setup();
+      this.d3el
+        .on('load', () => { this.trigger('viewLoaded'); })
+        .attr('src', this.src);
     }
     get src () {
       return this._src;
@@ -777,6 +794,22 @@ const { IFrameView, IFrameMixin } = createMixinAndDefault('IFrameMixin', GLView,
     get isLoading () {
       return super.isLoading || !this.frameLoaded;
     }
+    openAsTab () {
+      window.open(this._src, '_blank');
+    }
+  }
+  return IFrameView;
+}, true);
+
+var defaultStyle$3 = ".lm_header .lm_tab.IFrameTab {\n  padding-right: 36px;\n}\n.lm_header .lm_tab.IFrameTab .linkIcon {\n  position: absolute;\n  width: 11px;\n  height: 11px;\n  background-image: url(\"data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhLS0gQ3JlYXRlZCB3aXRoIElua3NjYXBlIChodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy8pIC0tPgoKPHN2ZwogICB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iCiAgIHhtbG5zOmNjPSJodHRwOi8vY3JlYXRpdmVjb21tb25zLm9yZy9ucyMiCiAgIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyIKICAgeG1sbnM6c3ZnPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIKICAgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIgogICB4bWxuczpzb2RpcG9kaT0iaHR0cDovL3NvZGlwb2RpLnNvdXJjZWZvcmdlLm5ldC9EVEQvc29kaXBvZGktMC5kdGQiCiAgIHhtbG5zOmlua3NjYXBlPSJodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy9uYW1lc3BhY2VzL2lua3NjYXBlIgogICB3aWR0aD0iNTEyIgogICBoZWlnaHQ9IjUxMiIKICAgdmlld0JveD0iMCAwIDUxMiA1MTIiCiAgIHZlcnNpb249IjEuMSIKICAgaWQ9InN2ZzgiCiAgIGlua3NjYXBlOnZlcnNpb249IjAuOTIuNCAoNWRhNjg5YzMxMywgMjAxOS0wMS0xNCkiCiAgIHNvZGlwb2RpOmRvY25hbWU9Imxpbmsuc3ZnIj4KICA8ZGVmcwogICAgIGlkPSJkZWZzMiIgLz4KICA8c29kaXBvZGk6bmFtZWR2aWV3CiAgICAgaWQ9ImJhc2UiCiAgICAgcGFnZWNvbG9yPSIjZmZmZmZmIgogICAgIGJvcmRlcmNvbG9yPSIjNjY2NjY2IgogICAgIGJvcmRlcm9wYWNpdHk9IjEuMCIKICAgICBpbmtzY2FwZTpwYWdlb3BhY2l0eT0iMC4wIgogICAgIGlua3NjYXBlOnBhZ2VzaGFkb3c9IjIiCiAgICAgaW5rc2NhcGU6em9vbT0iMC43IgogICAgIGlua3NjYXBlOmN4PSI5NTEuNjcyNDQiCiAgICAgaW5rc2NhcGU6Y3k9Ijg3OS4zMDQ2OSIKICAgICBpbmtzY2FwZTpkb2N1bWVudC11bml0cz0icHgiCiAgICAgaW5rc2NhcGU6Y3VycmVudC1sYXllcj0ibGF5ZXIxIgogICAgIHNob3dncmlkPSJ0cnVlIgogICAgIHVuaXRzPSJweCIKICAgICBpbmtzY2FwZTp3aW5kb3ctd2lkdGg9IjMzNjAiCiAgICAgaW5rc2NhcGU6d2luZG93LWhlaWdodD0iMTc4MCIKICAgICBpbmtzY2FwZTp3aW5kb3cteD0iNzAzMCIKICAgICBpbmtzY2FwZTp3aW5kb3cteT0iLTEyIgogICAgIGlua3NjYXBlOndpbmRvdy1tYXhpbWl6ZWQ9IjEiCiAgICAgaW5rc2NhcGU6cGFnZWNoZWNrZXJib2FyZD0iZmFsc2UiPgogICAgPGlua3NjYXBlOmdyaWQKICAgICAgIHR5cGU9Inh5Z3JpZCIKICAgICAgIGlkPSJncmlkMTM1OCIKICAgICAgIHNwYWNpbmd4PSIyMCIKICAgICAgIHNwYWNpbmd5PSIyMCIgLz4KICA8L3NvZGlwb2RpOm5hbWVkdmlldz4KICA8bWV0YWRhdGEKICAgICBpZD0ibWV0YWRhdGE1Ij4KICAgIDxyZGY6UkRGPgogICAgICA8Y2M6V29yawogICAgICAgICByZGY6YWJvdXQ9IiI+CiAgICAgICAgPGRjOmZvcm1hdD5pbWFnZS9zdmcreG1sPC9kYzpmb3JtYXQ+CiAgICAgICAgPGRjOnR5cGUKICAgICAgICAgICByZGY6cmVzb3VyY2U9Imh0dHA6Ly9wdXJsLm9yZy9kYy9kY21pdHlwZS9TdGlsbEltYWdlIiAvPgogICAgICAgIDxkYzp0aXRsZT48L2RjOnRpdGxlPgogICAgICA8L2NjOldvcms+CiAgICA8L3JkZjpSREY+CiAgPC9tZXRhZGF0YT4KICA8ZwogICAgIGlua3NjYXBlOmxhYmVsPSJMYXllciAxIgogICAgIGlua3NjYXBlOmdyb3VwbW9kZT0ibGF5ZXIiCiAgICAgaWQ9ImxheWVyMSIKICAgICB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLC01NzkuMjUwMDEpIj4KICAgIDxnCiAgICAgICBpZD0iZzgzNyIKICAgICAgIHRyYW5zZm9ybT0ibWF0cml4KDEuOTI0NDY4OSwwLDAsMS45MjQ0Njg5LC0yMDMzLjI4ODQsLTgxNC45NDQ5MikiCiAgICAgICBzdHlsZT0ic3Ryb2tlLXdpZHRoOjAuNTE5NjIzODgiPgogICAgICA8cGF0aAogICAgICAgICBpZD0icGF0aDgzMSIKICAgICAgICAgZD0ibSAxMjc3LjcyOTgsOTg1LjEwMjIxIGMgNS44NzU0LC0yLjI2NzIxIDEwLjA1OTMsLTYuNDczOTEgMTIuMTA5NiwtMTIuMTc1NTkgMS41NzA2LC00LjM2NzcxIDEuNzAzMiwtOS42MjAwNCAxLjQ0NDksLTU3LjI0Mjc5IC0wLjI3NjgsLTUxLjA1MTY1IC0wLjMzOTEsLTUyLjUyNjA4IC0yLjM2NCwtNTUuOTMzODIgLTEuMTQzOCwtMS45MjUgLTMuOTkxMywtNC45NjI1IC02LjMyNzcsLTYuNzUgLTMuNzQ2MiwtMi44NjYgLTQuOTc3NCwtMy4yNDc0MSAtMTAuNDIwMywtMy4yMjgwNCAtOC4zMDE0LDAuMDI5NSAtMTMuNzQ1NSwyLjU4NTc0IC0xNy4zNjE4LDguMTUyMDYgbCAtMi44MTA1LDQuMzI1OTggLTAuMzA5Miw0Mi4yNSAtMC4zMDkzLDQyLjI1IEggMTE3NS40NDA4IDEwOTkuNSB2IC03Ni41IC03Ni41IGwgMzguNzUsLTAuMDA2IGMgMjMuNTY5NywtMC4wMDMgNDAuMjA2OSwtMC40MTAxOSA0Mi40Njg5LC0xLjAzODQzIDE4LjYxMDEsLTUuMTY4NTIgMTguMDg2OSwtMzIuNzE1MjkgLTAuNzE4OSwtMzcuODUyMjEgLTUuOTM3NSwtMS42MjE4NyAtMTAwLjQxMDQsLTEuNTA5NCAtMTA1Ljg4NCwwLjEyNjA2IC02LjM0MDcsMS44OTQ1NSAtMTIuMTczMyw4LjMyMDQ0IC0xMy41NDM2LDE0LjkyMTM0IC0wLjc5NCwzLjgyNDg1IC0xLjA0MDUsMzMuOTMxMTYgLTAuODQ2NCwxMDMuMzcyNjggbCAwLjI3NCw5Ny45NzY1NiAyLjUsNC40MTE0MiBjIDEuMzc1LDIuNDI2MjggMy42NTEsNS4yNjIwNyA1LjA1NzgsNi4zMDE3NyA2LjQ4OTQsNC43OTU5NSA0LjIxNTEsNC42OTYyMyAxMDguMTcyLDQuNzQyOTIgODguNDM5LDAuMDM5NyA5OC4xMzU3LC0wLjExMjc2IDEwMiwtMS42MDM5MSB6IgogICAgICAgICBzdHlsZT0iZmlsbDojMDAwMDAwO3N0cm9rZS13aWR0aDowLjUxOTYyMzg4IgogICAgICAgICBpbmtzY2FwZTpjb25uZWN0b3ItY3VydmF0dXJlPSIwIiAvPgogICAgICA8cGF0aAogICAgICAgICBpZD0icGF0aDgyNyIKICAgICAgICAgZD0ibSAxMTkxLjc5OTcsODgwLjEyOTgxIGMgMy45NjgyLC0yLjAwODkzIDExLjU1NDIsLTkuMjA4NzIgNTMuMjkyNSwtNTAuNTc5MjMgMTguMjAwNywtMTguMDQwMzEgMzMuMzg4MiwtMzIuODAwNTcgMzMuNzUsLTMyLjgwMDU3IDAuMzYxOCwwIDAuNjY3Nyw2LjQxMjUgMC42Nzk4LDE0LjI1IDAuMDI1LDE2LjE3NzcyIDEuMDI4NiwxOS42NzU5IDcuMzc5LDI1LjcxODYyIDMuMzIyMywzLjE2MTIzIDQuMjcwNCwzLjUwMzk0IDEwLjY5OTEsMy44NjcxOSA1LjI0NDMsMC4yOTYzNCA4LjA0ODYsLTAuMDUgMTAuOTMyMSwtMS4zNTAzMiA0LjY2OTcsLTIuMTA1NzggOC45MzU1LC03LjkyOTc3IDEwLjA1NzksLTEzLjczMjExIDEuMzE2NywtNi44MDY0NSAxLjEwNTcsLTc3LjA5MDI5IC0wLjI0NzYsLTgyLjQ2NDQ5IC0xLjUyMTQsLTYuMDQyMDEgLTguMDYzMSwtMTIuODI4MjcgLTEzLjQ2NjYsLTEzLjk2OTk1IC0yLjEzMTcsLTAuNDUwNDIgLTIyLjEwMDksLTAuODE4OTQgLTQ0LjM3NTksLTAuODE4OTQgSCAxMjIwIGwgLTQuNDU1NiwyLjUgYyAtNS42NDksMy4xNjk2NCAtOS44NTUxLDkuMTQzOCAtMTAuNjYyNSwxNS4xNDQ3NCAtMC44OTMzLDYuNjM5NTIgMi44ODE0LDE0LjY3NjkzIDguNzAzNiwxOC41MzIzOCA0LjE0MjIsMi43NDI5MyA0LjcyODgsMi44MzcwNCAyMC43MTQ5LDMuMzIyODggbCAxNi40NTIsMC41IC00MS43Njc3LDQxIGMgLTQzLjgzMDcsNDMuMDI1IC00NS41MTI3LDQ0Ljk5ODE2IC00NS40NjI3LDUzLjMzMjkxIDAuMDI0LDQuMDU1ODggMi44NzAyLDExLjA5MDI3IDUuNjY5OSwxNC4wMTQ1NiA0Ljg5NDMsNS4xMTIwNyAxNi4wNDU3LDYuODU0NDIgMjIuNjA3OCwzLjUzMjMzIHoiCiAgICAgICAgIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjAuNTE5NjIzODgiCiAgICAgICAgIGlua3NjYXBlOmNvbm5lY3Rvci1jdXJ2YXR1cmU9IjAiIC8+CiAgICA8L2c+CiAgPC9nPgo8L3N2Zz4K\");\n  background-position: center center;\n  background-repeat: no-repeat;\n  background-size: 11px 11px;\n  top: 4px;\n  right: 6px;\n  margin-right: 13px;\n  opacity: 0.4;\n}\n.lm_header .lm_tab.IFrameTab .linkIcon:hover {\n  opacity: 1;\n}\n";
+
+/* globals d3 */
+
+const { IFrameGLView, IFrameGLMixin } = createMixinAndDefault('IFrameGLMixin', GLView, superclass => {
+  class IFrameGLView extends IFrameMixin(RestylableMixin(superclass, defaultStyle$3, 'IFrameGLView')) {
+    setupD3El () {
+      return this.glEl.append('iframe');
+    }
     setupTab () {
       super.setupTab();
       this.glTabEl
@@ -788,12 +821,12 @@ const { IFrameView, IFrameMixin } = createMixinAndDefault('IFrameMixin', GLView,
           d3.event.stopPropagation();
         })
         .on('mouseup', () => {
-          window.open(this._src, '_blank');
+          this.openAsTab();
         });
     }
   }
-  return IFrameView;
-});
+  return IFrameGLView;
+}, true);
 
 
 
@@ -802,12 +835,11 @@ var goldenlayout = /*#__PURE__*/Object.freeze({
   GLRootView: GLRootView,
   GLRootMixin: GLRootMixin,
   GLView: GLView,
-  GLViewMixin: GLViewMixin,
-  FixedGLViewMixin: FixedGLMixin,
-  SvgView: SvgView,
-  SvgViewMixin: SvgViewMixin,
-  IFrameView: IFrameView,
-  IFrameMixin: IFrameMixin
+  GLMixin: GLMixin,
+  SvgGLView: SvgGLView,
+  SvgGLMixin: SvgGLMixin,
+  IFrameGLView: IFrameGLView,
+  IFrameGLMixin: IFrameGLMixin
 });
 
 /* globals gapi */
@@ -1112,7 +1144,7 @@ const { LoadingView, LoadingMixin } = createMixinAndDefault('LoadingMixin', View
     }
   }
   return LoadingView;
-});
+}, true);
 
 var defaultStyle$5 = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nhttp://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8\nhttp://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8\n*/\n/*\nColor meanings:\n*/\n/*\nDummy class that exposes colors for assignment to classes in Javascript:\n*/\n.classColorList {\n  filter: url(#recolorImageTo1B9E77);\n  filter: url(#recolorImageToD95F02);\n  filter: url(#recolorImageTo7570B3);\n  filter: url(#recolorImageToE7298A);\n  filter: url(#recolorImageTo66A61E);\n  filter: url(#recolorImageToE6AB02);\n  filter: url(#recolorImageToA6761D);\n  filter: url(#recolorImageToB3E2CD);\n  filter: url(#recolorImageToFDCDAC);\n  filter: url(#recolorImageToCBD5E8);\n  filter: url(#recolorImageToF4CAE4);\n  filter: url(#recolorImageToE6F5C9);\n  filter: url(#recolorImageToFFF2AE);\n  filter: url(#recolorImageToF1E2CC);\n}\n/*\nGradients:\n*/\n.EmptyStateLayer {\n  position: absolute;\n  width: 100%;\n  height: 100%;\n  pointer-events: none;\n}\n.EmptyStateLayer .EmptyStateLayerContent {\n  position: absolute;\n  top: 50%;\n  transform: translateY(-50%);\n  left: 0.25em;\n  right: 0.25em;\n  text-align: center;\n}\n";
 
@@ -1154,9 +1186,9 @@ const { EmptyStateView, EmptyStateMixin } = createMixinAndDefault('EmptyStateMix
     }
   }
   return EmptyStateView;
-});
+}, true);
 
-var defaultStyle$6 = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nhttp://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8\nhttp://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8\n*/\n/*\nColor meanings:\n*/\n/*\nDummy class that exposes colors for assignment to classes in Javascript:\n*/\n.classColorList {\n  filter: url(#recolorImageTo1B9E77);\n  filter: url(#recolorImageToD95F02);\n  filter: url(#recolorImageTo7570B3);\n  filter: url(#recolorImageToE7298A);\n  filter: url(#recolorImageTo66A61E);\n  filter: url(#recolorImageToE6AB02);\n  filter: url(#recolorImageToA6761D);\n  filter: url(#recolorImageToB3E2CD);\n  filter: url(#recolorImageToFDCDAC);\n  filter: url(#recolorImageToCBD5E8);\n  filter: url(#recolorImageToF4CAE4);\n  filter: url(#recolorImageToE6F5C9);\n  filter: url(#recolorImageToFFF2AE);\n  filter: url(#recolorImageToF1E2CC);\n}\n/*\nGradients:\n*/\n.UkiButton {\n  position: relative;\n  min-width: 2.5em;\n  min-height: 2.5em;\n  width: -webkit-fit-content;\n  height: -webkit-fit-content;\n  width: fit-content;\n  height: fit-content;\n  background: white;\n  border-radius: 0.5em;\n  cursor: pointer;\n  user-select: none;\n}\n.UkiButton.small {\n  min-width: 1.5em;\n  min-height: 1.5em;\n}\n.UkiButton.tiny {\n  min-width: 1em;\n  min-height: 1em;\n}\n.UkiButton a {\n  position: absolute;\n  width: 100%;\n  height: 100%;\n  left: -1px;\n  top: -1px;\n  border: 1px solid #252525;\n  border-radius: 0.5em;\n  overflow: hidden;\n  background: linear-gradient(to bottom, rgba(82, 82, 82, 0.1) 0%, rgba(37, 37, 37, 0) 40%, rgba(0, 0, 0, 0.1) 100%);\n}\n.UkiButton img {\n  position: relative;\n  left: 0.5em;\n  top: 0.5em;\n  width: 1.5em;\n  height: 1.5em;\n  filter: url(#recolorImageTo252525);\n}\n.UkiButton .label {\n  white-space: nowrap;\n  position: relative;\n  vertical-align: top;\n  top: 0.65em;\n  margin: 0px 1em;\n  color: #252525;\n}\n.UkiButton.small img {\n  left: 0.375em;\n  top: 0.375em;\n  width: 0.75em;\n  height: 0.75em;\n}\n.UkiButton.tiny img {\n  left: 0.25em;\n  top: 0.25em;\n  width: 0.5em;\n  height: 0.5em;\n}\n.UkiButton .badge {\n  position: absolute;\n  font-size: 0.65em;\n  font-weight: 600;\n  font-family: 'Source Sans Pro', Arial, sans-serif;\n  right: -0.5em;\n  top: -0.5em;\n  text-align: center;\n  min-width: 0.65em;\n  padding: 0.25em 0.25em 0em 0.25em;\n  background-color: #252525;\n  color: #BDBDBD;\n  border-radius: 0.5em;\n  border: 1px solid #252525;\n}\n.UkiButton.small .label {\n  /* todo */\n}\n.UkiButton:hover a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, rgba(82, 82, 82, 0.25) 0%, rgba(37, 37, 37, 0.25) 40%, rgba(0, 0, 0, 0.5) 100%);\n}\n.UkiButton:active a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(37, 37, 37, 0.25) 40%, rgba(82, 82, 82, 0.5) 100%);\n}\n.UkiButton.selected a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, #525252 0%, #252525 40%, #000000 100%);\n}\n.UkiButton.selected img {\n  filter: url(#recolorImageToF7F7F7);\n}\n.UkiButton.selected .label {\n  color: #F7F7F7;\n}\n.UkiButton.selected:hover a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, #525252 0%, #252525 40%, black 100%);\n}\n.UkiButton.selected:active a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, black 0%, #252525 40%, #525252 100%);\n}\n.UkiButton.disabled,\n.UkiButton.disabled:hover,\n.UkiButton.disabled:active {\n  cursor: default;\n}\n.UkiButton.disabled a,\n.UkiButton.disabled:hover a,\n.UkiButton.disabled:active a {\n  border-color: #D9D9D9;\n  background: #BDBDBD;\n}\n.UkiButton.disabled img,\n.UkiButton.disabled:hover img,\n.UkiButton.disabled:active img {\n  filter: url(#recolorImageToD9D9D9);\n}\n.UkiButton.disabled .label,\n.UkiButton.disabled:hover .label,\n.UkiButton.disabled:active .label {\n  color: #D9D9D9;\n}\n";
+var defaultStyle$6 = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nhttp://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8\nhttp://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8\n*/\n/*\nColor meanings:\n*/\n/*\nDummy class that exposes colors for assignment to classes in Javascript:\n*/\n.classColorList {\n  filter: url(#recolorImageTo1B9E77);\n  filter: url(#recolorImageToD95F02);\n  filter: url(#recolorImageTo7570B3);\n  filter: url(#recolorImageToE7298A);\n  filter: url(#recolorImageTo66A61E);\n  filter: url(#recolorImageToE6AB02);\n  filter: url(#recolorImageToA6761D);\n  filter: url(#recolorImageToB3E2CD);\n  filter: url(#recolorImageToFDCDAC);\n  filter: url(#recolorImageToCBD5E8);\n  filter: url(#recolorImageToF4CAE4);\n  filter: url(#recolorImageToE6F5C9);\n  filter: url(#recolorImageToFFF2AE);\n  filter: url(#recolorImageToF1E2CC);\n}\n/*\nGradients:\n*/\n.UkiButton {\n  position: relative;\n  min-width: 2.5em;\n  min-height: 2.5em;\n  width: -webkit-fit-content;\n  height: -webkit-fit-content;\n  width: fit-content;\n  height: fit-content;\n  background: white;\n  border-radius: 0.5em;\n  cursor: pointer;\n  user-select: none;\n}\n.UkiButton.small {\n  min-width: 1.5em;\n  min-height: 1.5em;\n}\n.UkiButton.tiny {\n  min-width: 1em;\n  min-height: 1em;\n}\n.UkiButton a {\n  position: absolute;\n  width: 100%;\n  height: 100%;\n  left: -1px;\n  top: -1px;\n  border: 1px solid #252525;\n  border-radius: 0.5em;\n  overflow: hidden;\n  background: linear-gradient(to bottom, rgba(82, 82, 82, 0.1) 0%, rgba(37, 37, 37, 0) 40%, rgba(0, 0, 0, 0.1) 100%);\n}\n.UkiButton img {\n  position: relative;\n  left: 0.5em;\n  top: 0.5em;\n  width: 1.5em;\n  height: 1.5em;\n  filter: url(#recolorImageTo252525);\n}\n.UkiButton .label {\n  white-space: nowrap;\n  position: relative;\n  vertical-align: top;\n  top: 0.65em;\n  margin: 0px 1em;\n  color: #252525;\n}\n.UkiButton.small img {\n  left: 0.375em;\n  top: 0.375em;\n  width: 0.75em;\n  height: 0.75em;\n}\n.UkiButton.tiny img {\n  left: 0.25em;\n  top: 0.25em;\n  width: 0.5em;\n  height: 0.5em;\n}\n.UkiButton.small .label {\n  font-size: 0.7em;\n}\n.UkiButton.tiny .label {\n  font-size: 0.5em;\n}\n.UkiButton .badge {\n  position: absolute;\n  font-size: 0.7em;\n  font-weight: 600;\n  font-family: 'Source Sans Pro', Arial, sans-serif;\n  right: -0.5em;\n  top: -0.5em;\n  text-align: center;\n  min-width: 0.65em;\n  padding: 0em 0.25em 0em 0.25em;\n  background-color: #252525;\n  color: #BDBDBD;\n  border-radius: 0.5em;\n  border: 1px solid #252525;\n}\n.UkiButton:hover a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, rgba(82, 82, 82, 0.25) 0%, rgba(37, 37, 37, 0.25) 40%, rgba(0, 0, 0, 0.5) 100%);\n}\n.UkiButton:active a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(37, 37, 37, 0.25) 40%, rgba(82, 82, 82, 0.5) 100%);\n}\n.UkiButton.selected a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, #525252 0%, #252525 40%, #000000 100%);\n}\n.UkiButton.selected img {\n  filter: url(#recolorImageToF7F7F7);\n}\n.UkiButton.selected .label {\n  color: #F7F7F7;\n}\n.UkiButton.selected:hover a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, #525252 0%, #252525 40%, black 100%);\n}\n.UkiButton.selected:active a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, black 0%, #252525 40%, #525252 100%);\n}\n.UkiButton.disabled,\n.UkiButton.disabled:hover,\n.UkiButton.disabled:active {\n  cursor: default;\n}\n.UkiButton.disabled a,\n.UkiButton.disabled:hover a,\n.UkiButton.disabled:active a {\n  border-color: #D9D9D9;\n  background: #BDBDBD;\n}\n.UkiButton.disabled img,\n.UkiButton.disabled:hover img,\n.UkiButton.disabled:active img {\n  filter: url(#recolorImageToD9D9D9);\n}\n.UkiButton.disabled .label,\n.UkiButton.disabled:hover .label,\n.UkiButton.disabled:active .label {\n  color: #D9D9D9;\n}\n";
 
 const { UkiButton, UkiButtonMixin } = createMixinAndDefault('UkiButtonMixin', View, superclass => {
   class UkiButton extends RestylableMixin(superclass, defaultStyle$6, 'UkiButton') {
@@ -1302,7 +1334,7 @@ const { ModalView, ModalMixin } = createMixinAndDefault('ModalMixin', View, supe
     }
   }
   return ModalView;
-});
+}, true);
 
 
 
@@ -1312,6 +1344,12 @@ var ui = /*#__PURE__*/Object.freeze({
   LoadingMixin: LoadingMixin,
   EmptyStateView: EmptyStateView,
   EmptyStateMixin: EmptyStateMixin,
+  ParentSizeView: ParentSizeView,
+  ParentSizeMixin: ParentSizeMixin,
+  SvgView: SvgView,
+  SvgMixin: SvgMixin,
+  IFrameView: IFrameView,
+  IFrameMixin: IFrameMixin,
   UkiButton: UkiButton,
   UkiButtonMixin: UkiButtonMixin,
   ModalView: ModalView,

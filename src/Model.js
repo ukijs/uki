@@ -60,6 +60,9 @@ class Model {
       document.getElementsByTagName('head')[0].appendChild(link);
       return loadPromise;
     } else if (raw !== undefined) {
+      if (Model.RAW_CSS[raw]) {
+        return;
+      }
       const style = document.createElement('style');
       style.type = 'text/css';
       for (const [key, value] of Object.keys(extraAttrs)) {
@@ -70,6 +73,7 @@ class Model {
       } else {
         style.innerHTML = raw;
       }
+      Model.RAW_CSS[raw] = true;
       document.getElementsByTagName('head')[0].appendChild(style);
       return Promise.resolve(style);
     } else {
@@ -290,5 +294,6 @@ class Model {
 }
 Model.LESS_PROMISES = {};
 Model.JS_PROMISES = {};
+Model.RAW_CSS = {};
 
 export default Model;

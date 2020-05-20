@@ -64,24 +64,27 @@
     width: @tinyButtonImageSize;
     height: @tinyButtonImageSize;
   }
+  &.small .label {
+    font-size: 0.7em;
+  }
+  &.tiny .label {
+    font-size: 0.5em;
+  }
 
   .badge {
     position: absolute;
-    font-size: 0.65em;
+    font-size: 0.7em;
     font-weight: @headerFontWeight;
     font-family: @headerFontFamily;
     right: -0.5em;
     top: -0.5em;
     text-align: center;
     min-width: 0.65em;
-    padding: 0.25em 0.25em 0em 0.25em;
+    padding: 0em 0.25em 0em 0.25em;
     background-color: @textColor;
     color: @darkBackgroundColor;
     border-radius: @borderRadius;
     border: 1px solid @shadowColor;
-  }
-  &.small .label {
-    /* todo */
   }
 
   &:hover {

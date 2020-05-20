@@ -1,31 +1,15 @@
 /* globals d3 */
 import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
-import FixedGLViewMixin from '../FixedGLView/FixedGLViewMixin.js';
-import { GLView } from '../GLView/GLView.js';
-import { RestylableMixin } from '../../ui/Restylable/Restylable.js';
-import defaultStyle from './style.less';
+import { ParentSizeMixin } from '../ParentSize/ParentSize.js';
+import View from '../../View.js';
 
-const { SvgView, SvgViewMixin } = createMixinAndDefault('SvgViewMixin', GLView, superclass => {
-  class SvgView extends FixedGLViewMixin(RestylableMixin(superclass, defaultStyle, 'SvgView', true)) {
+const { SvgView, SvgMixin } = createMixinAndDefault('SvgMixin', View, superclass => {
+  class SvgView extends ParentSizeMixin(superclass) {
     constructor (options) {
       options.fixedTagType = 'svg';
       super(options);
     }
-    setupTab () {
-      super.setupTab();
-      this.glTabEl
-        .classed('SvgTab', true)
-        .append('div')
-        .classed('downloadIcon', true)
-        .attr('title', 'Download')
-        .on('mousedown', () => {
-          d3.event.stopPropagation();
-        })
-        .on('mouseup', () => {
-          this.downloadSvg();
-        });
-    }
-    downloadSvg () {
+    download () {
       // Adapted from https://stackoverflow.com/a/37387449/1058935
       const containerElements = ['svg', 'g'];
       const relevantStyles = {
@@ -69,5 +53,5 @@ const { SvgView, SvgViewMixin } = createMixinAndDefault('SvgViewMixin', GLView, 
     }
   }
   return SvgView;
-});
-export { SvgView, SvgViewMixin };
+}, true);
+export { SvgView, SvgMixin };

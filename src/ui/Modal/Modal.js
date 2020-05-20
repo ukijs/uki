@@ -52,5 +52,5 @@ const { ModalView, ModalMixin } = createMixinAndDefault('ModalMixin', View, supe
     }
   }
   return ModalView;
-});
+}, true);
 export { ModalView, ModalMixin };

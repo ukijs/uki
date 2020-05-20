@@ -5,7 +5,7 @@ import { IntrospectableMixin } from '../../utils/Introspectable.js';
 import { RestylableMixin } from '../../ui/Restylable/Restylable.js';
 import defaultStyle from './style.less';
 
-const { GLView, GLViewMixin } = createMixinAndDefault('GLViewMixin', View, superclass => {
+const { GLView, GLMixin } = createMixinAndDefault('GLMixin', View, superclass => {
   class GLView extends IntrospectableMixin(RestylableMixin(superclass, defaultStyle, 'GLView')) {
     constructor (options) {
       super(options);
@@ -64,6 +64,6 @@ const { GLView, GLViewMixin } = createMixinAndDefault('GLViewMixin', View, super
     }
   }
   return GLView;
-});
+}, true);
 
-export { GLView, GLViewMixin };
+export { GLView, GLMixin };
