@@ -18,7 +18,10 @@ const { SvgView, SvgViewMixin } = createMixinAndDefault('SvgViewMixin', GLView, 
         .append('div')
         .classed('downloadIcon', true)
         .attr('title', 'Download')
-        .on('click', () => {
+        .on('mousedown', () => {
+          d3.event.stopPropagation();
+        })
+        .on('mouseup', () => {
           this.downloadSvg();
         });
     }

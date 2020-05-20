@@ -3,13 +3,14 @@
 A minimal, d3-based Model-View framework.
 
 # What is this?
-[bl.ocks](https://bl.ocks.org) are awesome and simple, but building more
-complex / linked systems gets hairy.
+Yet another web framework ([why?](#Why_another_framework)), originally designed
+as a fast way to design maintainable, multiple linked visualizations from
+[bl.ocks](https://bl.ocks.org).
 
-`uki` is a framework to act as glue between bl.ock-esque views.
+Main selling point: **ZERO BUILD STEPS** means that there's nothing to configure.
 
 # Documentation
-The basic idea is that you extend the `Model` and `View` classes with your own:
+Basic usage is to extend the `Model` and `View` classes with your own:
 - [Models](./docs/models.md)
 - [Views](./docs/views.md)
 - [Installation and Usage](./docs/installation.md)
@@ -137,7 +138,8 @@ Among these frustrations:
 - Incompatibility with other frameworks / libraries (e.g. d3.js) that don't
  subscribe to those philosophies
 - Nasty build processes (e.g. webpack) that aren't really needed now that native
-  ES6 imports are a thing
+  ES6 imports are a thing. "Loading stuff is hard" shouldn't be a reason to
+  [make web development suck](https://hackernoon.com/how-it-feels-to-learn-javascript-in-2016-d3a717dd577f).
 - Introducing non-standard syntax that you have to learn beyond what the browser
   already does natively—and in some cases, *re-learning* new variants of
   existing syntax that are subtly different (React, I'm looking at you)

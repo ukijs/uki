@@ -1,6 +1,11 @@
 /* globals d3 */
 import { goldenlayout, ui, View } from '../uki.esm.js';
 
+/*
+ * WARNING: The capabilities in this example are still totally undocumented and
+ * prone to rapid revision + breaking changes; use at your own risk!!
+ */
+
 /* eslint-disable indent */
 class BasicDemoView extends ui.LoadingMixin(
                             ui.EmptyStateMixin(goldenlayout.GLView)) {

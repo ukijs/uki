@@ -11,7 +11,7 @@ const commonPlugins = [
   string({
     include: ['**/*.html', '**/*.svg']
   }),
-  less()
+  less({ output: false })
 ];
 
 // Basic build formats, without minification

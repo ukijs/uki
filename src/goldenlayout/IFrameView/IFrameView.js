@@ -1,3 +1,4 @@
+/* globals d3 */
 import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
 import FixedGLViewMixin from '../FixedGLView/FixedGLViewMixin.js';
 import { GLView } from '../GLView/GLView.js';
@@ -32,7 +33,10 @@ const { IFrameView, IFrameMixin } = createMixinAndDefault('IFrameMixin', GLView,
         .append('div')
         .classed('linkIcon', true)
         .attr('title', 'Open in new tab')
-        .on('click', () => {
+        .on('mousedown', () => {
+          d3.event.stopPropagation();
+        })
+        .on('mouseup', () => {
           window.open(this._src, '_blank');
         });
     }
