@@ -59,12 +59,13 @@ class View extends Model {
         if (this._setupPromise) {
           await this._setupPromise;
         }
-        await this.draw(this.d3el);
+        const result = await this.draw(this.d3el);
         this.trigger('drawFinished');
-        for (const r of this._renderResolves) {
-          r();
-        }
+        const temp = this._renderResolves;
         this._renderResolves = [];
+        for (const r of temp) {
+          r(result);
+        }
       }, this.debounceWait);
     });
   }

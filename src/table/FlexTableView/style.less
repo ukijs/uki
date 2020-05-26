@@ -1,0 +1,30 @@
+.FlexTableView {
+  padding-left: 2em;
+  table {
+    border-collapse: collapse;
+    font-size: 10.5pt;
+  }
+  th {
+    background-color: #ccc;
+  }
+  th, td {
+    border: 1px solid #ccc;
+    text-align: left;
+    vertical-align: bottom;
+    padding: 2px;
+    & > div {
+      max-height: 4em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+  th {
+    position: sticky;
+    top: -1px;
+  }
+  .attributeSelector {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+  }
+}

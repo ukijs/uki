@@ -2,6 +2,7 @@ import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
 import View from '../../View.js';
 import { RestylableMixin } from '../Restylable/Restylable.js';
 import defaultStyle from './style.less';
+import recolorImageFilter from '../../utils/recolorImageFilter.js';
 
 const { UkiButton, UkiButtonMixin } = createMixinAndDefault('UkiButtonMixin', View, superclass => {
   class UkiButton extends RestylableMixin(superclass, defaultStyle, 'UkiButton') {
@@ -59,6 +60,7 @@ const { UkiButton, UkiButtonMixin } = createMixinAndDefault('UkiButtonMixin', Vi
     }
     setup () {
       super.setup();
+      recolorImageFilter();
       this.d3el.append('a');
       this.d3el.append('img')
         .style('display', 'none');
@@ -69,7 +71,11 @@ const { UkiButton, UkiButtonMixin } = createMixinAndDefault('UkiButtonMixin', Vi
         .classed('badge', true)
         .style('display', 'none');
 
-      this.d3el.on('click', () => { this.trigger('click'); });
+      this.d3el.on('click', () => {
+        if (!this.disabled) {
+          this.trigger('click');
+        }
+      });
     }
     draw () {
       super.draw();
@@ -85,6 +91,7 @@ const { UkiButton, UkiButtonMixin } = createMixinAndDefault('UkiButtonMixin', Vi
         .attr('src', this.img);
 
       this.d3el.select('.label')
+        .classed('labelOnly', !this.img)
         .style('display', this.label === undefined ? 'none' : null)
         .text(this.label);
 

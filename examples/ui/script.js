@@ -1,5 +1,5 @@
 /* globals d3 */
-import { goldenlayout, ui, View } from '../uki.esm.js';
+import { goldenlayout, ui } from '../uki.esm.js';
 
 /*
  * WARNING: The capabilities in this example are still totally undocumented and
@@ -29,33 +29,45 @@ class BasicDemoView extends ui.LoadingMixin(
 
 class ModalLauncherView extends goldenlayout.GLView {
   get title () {
-    return 'Buttons and Modals';
+    return 'Buttons, Tooltips, and Modals';
   }
   setup () {
     super.setup({ lessArgs: { modifyVars: {
       '@contentPadding': '2em'
     } } });
-    this.d3el.style('padding', '1em')
-      .style('display', 'flex')
-      .style('flex-direction', 'row')
-      .style('justify-content', 'space-around')
-      .style('width', 'calc(100% - 2em)');
+    this.d3el.style('padding', '1em');
 
-    for (const size of [null, 'small', 'tiny']) {
-      this.createButton(size);
+    for (const disabled of [false, true]) {
+      for (const selected of [false, true]) {
+        for (const showBadge of [false, true]) {
+          for (const img of [undefined, 'openIcon.svg']) {
+            for (const label of [undefined, 'Show Modal']) {
+              const wrapper = this.d3el.append('div');
+              for (const size of [undefined, 'small', 'tiny']) {
+                this.createButton(wrapper, size, img, label, showBadge, disabled, selected);
+              }
+            }
+          }
+        }
+      }
     }
   }
-  createButton (size) {
-    const container = this.d3el.append('div');
+  createButton (wrapper, size, img, label, showBadge, disabled, selected) {
+    const container = wrapper.append('div')
+      .style('display', 'inline-block');
     let count = 0;
     const button = new ui.UkiButton({
       d3el: container.append('div'),
-      label: 'Show Modal',
-      size: size
+      label,
+      img,
+      size,
+      badge: showBadge ? 0 : undefined,
+      disabled,
+      selected
     });
     const modalResult = container.append('div')
       .style('margin-top', '1em');
-    button.on('click', () => {
+    const showModalFunc = () => {
       const buttons = window.modal.defaultButtons;
       buttons[1].onclick = function () {
         modalResult.text('Clicked OK');
@@ -75,6 +87,36 @@ class ModalLauncherView extends goldenlayout.GLView {
           <div>It accepts arbitrary html</div>
         `,
         buttons
+      });
+    };
+    button.on('click', showModalFunc);
+    button.d3el.on('mouseenter', function () {
+      window.tooltip.showContextMenu({
+        targetBounds: this.getBoundingClientRect(),
+        menuEntries: [
+          { content: { label, img, size, badge: count, disabled, selected }, onClick: showModalFunc },
+          { content: null },
+          { content: 'Button properties',
+            subEntries: [
+            { content: 'badge: ' + (count === 0 && !showBadge ? 'hidden' : count) },
+            { content: 'label: ' + (label || '(no label)') },
+            { content: 'img: ' + (img || '(no img)') },
+            { content: 'size: ' + (size || '(default)') },
+            { content: 'selected: ' + selected.toString() },
+            { content: 'disabled: ' + disabled.toString() }
+          ] },
+          { content: null },
+          { content: 'Deep',
+            subEntries: [{ content: 'Nested',
+              subEntries: [{ content: 'Menu',
+                subEntries: [{ content: 'Example' }]
+              }] },
+              { content: 'Nested',
+                subEntries: [{ content: 'Menu',
+                  subEntries: [{ content: 'Example' }]
+                }] }]
+          }
+        ]
       });
     });
   }
@@ -154,12 +196,6 @@ class RootView extends goldenlayout.GLRootView {
   }
 }
 
-class ModalView extends ui.ModalMixin(View) {
-  setup () {
-    super.setup();
-    this.contents.text('This is a modal!');
-  }
-}
-
 window.rootView = new RootView({ d3el: d3.select('#glRoot') });
-window.modal = new ModalView({ d3el: d3.select('#modalView') });
+window.modal = new ui.ModalView({ d3el: d3.select('#modalLayer') });
+window.tooltip = new ui.TooltipView({ d3el: d3.select('#tooltipLayer') });
