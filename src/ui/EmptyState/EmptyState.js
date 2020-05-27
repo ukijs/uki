@@ -6,7 +6,7 @@ import defaultStyle from './style.less';
 
 const { EmptyStateView, EmptyStateMixin } = createMixinAndDefault('EmptyStateMixin', View, superclass => {
   class EmptyStateView extends RestylableMixin(superclass, defaultStyle, 'EmptyStateLayer', true) {
-    getEmptyMessage () {
+    get emptyMessage () {
       // Should be overridden by subclasses; return an html string (or falsey to
       // hide the empty state layer)
       return '';
@@ -26,7 +26,7 @@ const { EmptyStateView, EmptyStateMixin } = createMixinAndDefault('EmptyStateMix
     }
     draw () {
       super.draw();
-      const message = this.getEmptyMessage();
+      const message = this.emptyMessage;
       // Match the position / size of this.d3el
       const bounds = this.getBounds();
       const parentBounds = this.getBounds(d3.select(this.d3el.node().parentNode));

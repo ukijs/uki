@@ -1153,7 +1153,7 @@ var defaultStyle$5 = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nht
 
 const { EmptyStateView, EmptyStateMixin } = createMixinAndDefault('EmptyStateMixin', View, superclass => {
   class EmptyStateView extends RestylableMixin(superclass, defaultStyle$5, 'EmptyStateLayer', true) {
-    getEmptyMessage () {
+    get emptyMessage () {
       // Should be overridden by subclasses; return an html string (or falsey to
       // hide the empty state layer)
       return '';
@@ -1173,7 +1173,7 @@ const { EmptyStateView, EmptyStateMixin } = createMixinAndDefault('EmptyStateMix
     }
     draw () {
       super.draw();
-      const message = this.getEmptyMessage();
+      const message = this.emptyMessage;
       // Match the position / size of this.d3el
       const bounds = this.getBounds();
       const parentBounds = this.getBounds(d3.select(this.d3el.node().parentNode));
@@ -1693,6 +1693,294 @@ var ui = /*#__PURE__*/Object.freeze({
   RestylableMixin: RestylableMixin
 });
 
+var defaultStyle$9 = ".BaseTableView table {\n  border-collapse: collapse;\n  font-size: 10.5pt;\n}\n.BaseTableView th {\n  background-color: #ccc;\n}\n.BaseTableView th,\n.BaseTableView td {\n  border: 1px solid #ccc;\n  text-align: left;\n  vertical-align: bottom;\n  padding: 2px;\n}\n.BaseTableView th > div,\n.BaseTableView td > div {\n  max-height: 4em;\n  max-width: 5em;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n.BaseTableView th {\n  position: sticky;\n  top: -1px;\n}\n";
+
+var template$1 = "<table>\n  <thead>\n    <tr></tr>\n  </thead>\n  <tbody>\n  </tbody>\n</table>\n";
+
+/* globals d3 */
+
+const { BaseTableView, BaseTableMixin } = createMixinAndDefault('BaseTableMixin', View, superclass => {
+  class BaseTableView extends RestylableMixin(superclass, defaultStyle$9, 'BaseTableView') {
+    constructor (options) {
+      super(options);
+      // By default, keep the original order
+      this._rowSortFunc = options.rowSortFunc || null;
+      this._rowIndexMode = options.rowIndexMode || 'none';
+    }
+    get rowIndexMode () {
+      return this._rowIndexMode;
+    }
+    set rowIndexMode (value) {
+      this._rowIndexMode = value;
+      this.render();
+    }
+    get rowSortFunc () {
+      return this._rowSortFunc;
+    }
+    set rowSortFunc (func) {
+      this._rowSortFunc = func;
+      this.render();
+    }
+    getRawHeaders () {
+      const rawRows = this.getRawRows();
+      if (rawRows.length === 0) {
+        return [];
+      } else {
+        return Object.keys(rawRows[0]);
+      }
+    }
+    getHeaders () {
+      let headers = this.getRawHeaders().map((data, index) => {
+        return { index, data };
+      });
+      if (this.rowIndexMode === 'rowIndex') {
+        headers.unshift({ index: 'rowIndex' });
+      } else if (this.rowIndexMode === 'itemIndex') {
+        headers.unshift({ index: 'itemIndex' });
+      }
+      return headers;
+    }
+    getRawRows () {
+      throw new Error(`getRows() not implemented by subclass`);
+    }
+    getRows () {
+      let rows = this.getRawRows().map((data, itemIndex) => {
+        return { itemIndex, rowIndex: itemIndex, data };
+      });
+      if (this.rowSortFunc) {
+        rows.sort(this.rowSortFunc);
+        rows.forEach((row, rowIndex) => {
+          row.rowIndex = rowIndex;
+        });
+      }
+      return rows;
+    }
+    setup () {
+      super.setup();
+
+      this.d3el.html(template$1);
+    }
+    async showTooltip (tooltipArgs) {
+      // Can + should be overridden if there's a global Tooltip instance somewhere
+      if (!window.uki) {
+        window.uki = {};
+      }
+      if (!window.uki.tooltip) {
+        window.uki.tooltip = new TooltipView({
+          d3el: d3.select('body').append('div')
+        });
+        await window.uki.tooltip.render();
+      }
+      window.uki.tooltip.show(tooltipArgs);
+    }
+    draw () {
+      super.draw();
+
+      if (this.isHidden || this.isLoading || this.emptyMessage) {
+        return;
+      }
+      this.drawHeaders();
+      this.drawRows();
+      this.drawCells();
+    }
+    drawHeaders () {
+      const headersToDraw = this.getHeaders();
+
+      this.headers = this.d3el.select('thead tr')
+        .selectAll('th').data(headersToDraw, d => d.index)
+        .order();
+      this.headers.exit().remove();
+      const headersEnter = this.headers.enter().append('th');
+      this.headers = this.headers.merge(headersEnter);
+
+      headersEnter.append('div')
+        .filter(d => d.index === 'rowIndex' || d.index === 'itemIndex')
+        .classed('corner', true);
+      this.cornerHeader = this.headers.select('.corner');
+      if (!this.cornerHeader.node()) {
+        this.cornerHeader = null;
+      }
+      const self = this;
+      this.headers.select('div')
+        .each(function (d) {
+          const d3el = d3.select(this);
+          self.updateHeader(d3el, d);
+          self.updateHoverListeners(d3el, d);
+        });
+    }
+    updateHeader (d3el, header) {
+      d3el.text(header.data);
+    }
+    drawRows () {
+      this.rows = this.d3el.select('tbody')
+        .selectAll('tr').data(this.getRows(), d => d.itemIndex)
+        .order();
+      this.rows.exit().remove();
+      const rowsEnter = this.rows.enter().append('tr');
+      this.rows = this.rows.merge(rowsEnter);
+    }
+    drawCells () {
+      this.cells = this.rows.selectAll('td')
+        .data(row => this.getHeaders().map((header, columnIndex) => {
+          return {
+            headerData: header.data,
+            headerIndex: header.index,
+            columnIndex: columnIndex,
+            itemIndex: row.itemIndex,
+            rowIndex: row.rowIndex,
+            data: header.index === 'rowIndex' ? row.rowIndex
+              : header.index === 'itemIndex' ? row.itemIndex
+                : row.data[header.data]
+          };
+        }));
+      this.cells.exit().remove();
+      const cellsEnter = this.cells.enter().append('td');
+      this.cells = this.cells.merge(cellsEnter);
+
+      cellsEnter.append('div'); // wrapper needed for flexible styling, like limiting height
+      const self = this;
+      this.cells.select('div')
+        .each(function (d) {
+          const d3el = d3.select(this);
+          self.updateCell(d3el, d);
+          self.updateHoverListeners(d3el, d);
+        });
+    }
+    updateCell (d3el, cell) {
+      d3el.text(cell.data);
+    }
+    updateHoverListeners (d3el, item) {
+      // Show a tooltip on the parent td or th element if the contents are
+      // truncated by text-overflow: ellipsis
+      const element = d3el.node();
+      if (element.clientHeight < element.scrollHeight) {
+        d3el.on('mouseenter.baseTableView', () => {
+          this.showTooltip({
+            content: item.data === undefined || item.data === null ? null : item.data,
+            targetBounds: element.getBoundingClientRect()
+          });
+        }).on('mouseleave.baseTableView', () => {
+          this.showTooltip({ content: null });
+        });
+      } else {
+        d3el.on('mouseenter.baseTableView', null)
+          .on('mouseleave.baseTableView', null);
+      }
+    }
+  }
+  return BaseTableView;
+}, true);
+
+var gearIcon = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n<svg\n   xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n   xmlns:cc=\"http://creativecommons.org/ns#\"\n   xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n   xmlns:svg=\"http://www.w3.org/2000/svg\"\n   xmlns=\"http://www.w3.org/2000/svg\"\n   xmlns:sodipodi=\"http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd\"\n   xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\"\n   sodipodi:docname=\"gear.svg\"\n   inkscape:version=\"1.0 (4035a4fb49, 2020-05-01)\"\n   id=\"svg8\"\n   version=\"1.1\"\n   viewBox=\"0 0 511.41864 512\"\n   height=\"512\"\n   width=\"511.41864\">\n  <defs\n     id=\"defs2\" />\n  <sodipodi:namedview\n     fit-margin-bottom=\"0\"\n     fit-margin-right=\"0\"\n     fit-margin-left=\"0\"\n     fit-margin-top=\"0\"\n     inkscape:document-rotation=\"0\"\n     inkscape:pagecheckerboard=\"false\"\n     inkscape:window-maximized=\"1\"\n     inkscape:window-y=\"-12\"\n     inkscape:window-x=\"-12\"\n     inkscape:window-height=\"1890\"\n     inkscape:window-width=\"3000\"\n     units=\"px\"\n     showgrid=\"true\"\n     inkscape:current-layer=\"layer1\"\n     inkscape:document-units=\"px\"\n     inkscape:cy=\"405.52354\"\n     inkscape:cx=\"165.62285\"\n     inkscape:zoom=\"0.7\"\n     inkscape:pageshadow=\"2\"\n     inkscape:pageopacity=\"0.0\"\n     borderopacity=\"1.0\"\n     bordercolor=\"#666666\"\n     pagecolor=\"#ffffff\"\n     id=\"base\">\n    <inkscape:grid\n       originy=\"-479.8705\"\n       originx=\"-106.04959\"\n       spacingy=\"20\"\n       spacingx=\"20\"\n       id=\"grid1358\"\n       type=\"xygrid\" />\n  </sodipodi:namedview>\n  <metadata\n     id=\"metadata5\">\n    <rdf:RDF>\n      <cc:Work\n         rdf:about=\"\">\n        <dc:format>image/svg+xml</dc:format>\n        <dc:type\n           rdf:resource=\"http://purl.org/dc/dcmitype/StillImage\" />\n        <dc:title></dc:title>\n      </cc:Work>\n    </rdf:RDF>\n  </metadata>\n  <g\n     transform=\"translate(-106.04959,-491.12051)\"\n     id=\"layer1\"\n     inkscape:groupmode=\"layer\"\n     inkscape:label=\"Layer 1\">\n    <path\n       id=\"path859\"\n       d=\"m 329.33072,1000.8335 c -6.98056,-3.12316 -16.17441,-13.40405 -17.44655,-19.50953 -0.48794,-2.34175 -1.23015,-12.19351 -1.64933,-21.89283 -0.85788,-19.84951 -3.8765,-26.99802 -14.46418,-34.25271 -8.38236,-5.74376 -21.68441,-7.29075 -29.21063,-3.39692 -3.14227,1.62556 -9.90171,7.0274 -15.02097,12.00384 -13.32301,12.95164 -20.48928,16.81236 -31.22345,16.82078 -14.17987,0.0196 -18.77379,-2.68564 -39.37481,-23.11652 -15.78953,-15.65902 -19.6681,-20.69914 -22.03329,-28.63181 -4.26917,-14.31834 -1.41503,-22.2179 13.93077,-38.55724 6.9483,-7.39813 13.50063,-15.73269 14.56078,-18.521 5.0312,-13.233 0.20316,-27.60603 -12.41723,-36.96558 -4.49991,-3.33715 -9.41639,-4.30473 -26.45269,-5.20628 -17.40832,-0.92114 -22.07977,-1.86776 -27.79283,-5.63208 -14.07512,-9.27411 -14.68672,-11.20437 -14.68672,-46.35332 0,-35.53419 0.85904,-38.60859 13.17205,-47.14164 6.84329,-4.74228 9.97818,-5.43828 28.9536,-6.42702 17.399,-0.90664 22.28732,-1.85639 26.80659,-5.20804 12.62039,-9.35955 17.44843,-23.73237 12.41723,-36.96538 -1.06013,-2.78851 -7.63842,-11.1505 -14.61843,-18.58234 -6.98,-7.43203 -13.24031,-16.00956 -13.9118,-19.06122 -0.67151,-3.05185 -1.54926,-6.62159 -1.9506,-7.93306 -0.40134,-1.31166 0.52862,-6.6218 2.06658,-11.80076 2.2563,-7.59776 6.11819,-12.67225 19.99808,-26.27724 21.69485,-21.26519 28.01536,-25.16265 40.82154,-25.17212 11.25431,-0.008 22.43719,6.05021 34.18428,18.51999 12.92373,13.71878 25.87742,16.43207 40.02191,8.38301 11.84254,-6.73913 16.80239,-17.88429 16.80239,-37.75624 0,-19.39387 3.17036,-28.03709 13.04883,-35.5743 l 7.21554,-5.50543 h 31.84873 c 29.24484,0 32.30134,0.33513 37.38468,4.09909 11.23648,8.32001 14.35353,15.51416 14.35353,33.12799 0,18.50805 2.35876,27.12065 9.57403,34.95796 6.85223,7.44292 14.26484,11.09194 22.53217,11.09194 10.54201,0 16.27037,-3.01609 29.32404,-15.4397 14.79368,-14.07963 18.20385,-15.91163 29.61871,-15.91163 13.83084,0 20.06425,3.80754 40.51878,24.74992 28.46179,29.14062 29.98342,40.58709 8.44409,63.52099 -18.70942,19.92084 -21.85956,28.67609 -15.65788,43.51879 3.20779,7.67736 12.8525,16.66833 19.32742,18.01742 2.34177,0.48791 12.2495,1.19233 22.01718,1.56521 14.38919,0.54924 18.89535,1.48684 23.74482,4.94 12.54543,8.93297 13.36056,11.82964 13.36056,47.47141 0,30.2795 -0.27647,32.71862 -4.35802,38.44064 -7.84803,11.00216 -13.25711,13.14835 -36.16203,14.34833 -16.95876,0.88822 -21.9503,1.86187 -26.33161,5.13613 -8.32298,6.21971 -12.68897,13.15601 -13.88263,22.05547 -1.51419,11.28903 2.04642,18.96285 15.16747,32.68828 14.02411,14.67008 15.60067,17.7813 15.60067,30.78643 0,12.8176 -1.4131,15.04923 -24.27885,38.34327 -14.27908,14.54643 -19.67271,18.72733 -26.96415,20.90135 -14.99475,4.4707 -26.16574,0.40816 -41.83129,-15.21285 -4.3108,-4.29866 -10.4831,-9.44106 -13.71621,-11.42776 -10.42635,-6.40703 -24.53884,-4.06235 -34.94089,5.80509 -8.48494,8.04888 -11.10638,16.4481 -11.10638,35.58495 0,14.51391 -0.66808,18.08776 -4.40878,23.58405 -9.27289,13.62442 -12.25222,14.62382 -45.20362,15.15972 -21.78684,0.3545 -31.3445,-0.2314 -35.7212,-2.1895 z m 66.14183,-151.70734 c 25.94628,-8.67864 50.90012,-29.62427 61.67158,-51.76537 10.87443,-22.35253 11.4053,-24.70466 11.4053,-50.53089 0,-20.84512 -0.66708,-26.21011 -4.47857,-36.02014 -12.48715,-32.13944 -36.29306,-55.1909 -68.59831,-66.42428 -13.92116,-4.84065 -45.64323,-5.67714 -60.1663,-1.58657 -36.79417,10.36377 -66.89093,40.72832 -76.63263,77.31436 -3.17209,11.91331 -3.54206,40.13831 -0.67125,51.20984 10.92692,42.14031 44.25552,73.17324 88.0809,82.01393 9.57758,1.93202 38.36085,-0.522 49.38928,-4.21088 z\"\n       style=\"fill:#000000;stroke-width:1\" />\n  </g>\n</svg>\n";
+
+/* globals d3 */
+
+const { FlexTableView, FlexTableMixin } = createMixinAndDefault('FlexTableMixin', BaseTableView, superclass => {
+  class FlexTableView extends superclass {
+    constructor (options) {
+      // FlexTable uses the corner header for its menu; showing either
+      // itemIndex or rowIndex is recommended, so itemIndex is enabled by
+      // default
+      options.rowIndexMode = options.rowIndexMode || 'itemIndex';
+      super(options);
+
+      // By default, show all headers in their original order
+      this.visibleHeaderIndices = null;
+    }
+    getHeaders () {
+      const headers = super.getHeaders();
+      if (this.visibleHeaderIndices === null) {
+        return headers;
+      } else {
+        return this.visibleHeaderIndices.map(headerIndex => {
+          return headers.find(h => h.index === headerIndex);
+        });
+      }
+    }
+    drawFlexMenu (tooltipEl) {
+      const fullHeaderList = super.getHeaders();
+      if (this.rowIndexMode !== 'none') {
+        fullHeaderList.splice(0, 1);
+      }
+
+      tooltipEl.html(`<h3>Show columns:</h3><ul style="padding:0"></ul>`);
+
+      let listItems = tooltipEl.select('ul')
+        .selectAll('li').data(fullHeaderList);
+      listItems.exit().remove();
+      const listItemsEnter = listItems.enter().append('li');
+      listItems = listItems.merge(listItemsEnter);
+
+      listItems
+        .style('max-width', '15em')
+        .style('list-style', 'none')
+        .on('click', () => {
+          d3.event.stopPropagation();
+        });
+
+      listItemsEnter.append('input')
+        .attr('type', 'checkbox')
+        .attr('id', (d, i) => `attrCheckbox${i}`)
+        .property('checked', d => this.headerIsVisible(d.index))
+        .on('change', d => {
+          this.toggleHeader(d);
+        });
+      listItemsEnter.append('label')
+        .attr('for', (d, i) => `attrCheckbox${i}`)
+        .text(d => d.data);
+    }
+    headerIsVisible (headerIndex) {
+      return this.visibleHeaderIndices === null ||
+        this.visibleHeaderIndices.indexOf(headerIndex) !== -1;
+    }
+    updateHeader (d3el, header) {
+      if (d3el.node() === this.cornerHeader.node()) {
+        if (!this.attributeSelector) {
+          this.attributeSelector = new UkiButton({
+            d3el: this.cornerHeader.append('div').classed('attributeSelector', true),
+            img: URL.createObjectURL(new window.Blob([gearIcon], { type: 'image/svg+xml' })),
+            size: 'small'
+          });
+        }
+        this.attributeSelector.on('click', () => {
+          this.showTooltip({
+            content: tooltipEl => { this.drawFlexMenu(tooltipEl); },
+            targetBounds: this.attributeSelector.d3el.node().getBoundingClientRect(),
+            interactive: true,
+            hideAfterMs: 0
+          });
+        });
+      } else {
+        super.updateHeader(d3el, header);
+      }
+    }
+    toggleHeader (header) {
+      if (this.visibleHeaderIndices === null) {
+        // Show all but the header toggled
+        this.visibleHeaderIndices = this.getHeaders().map(h2 => h2.index);
+      }
+      const index = this.visibleHeaderIndices.indexOf(header.index);
+      if (index === -1) {
+        this.visibleHeaderIndices.push(header.index);
+      } else {
+        this.visibleHeaderIndices.splice(index, 1);
+      }
+      this.render();
+    }
+  }
+  return FlexTableView;
+}, true);
+
+
+
+var table = /*#__PURE__*/Object.freeze({
+  __proto__: null,
+  BaseTableView: BaseTableView,
+  BaseTableMixin: BaseTableMixin,
+  FlexTableView: FlexTableView,
+  FlexTableMixin: FlexTableMixin
+});
+
 
 
 var utils = /*#__PURE__*/Object.freeze({
@@ -1702,4 +1990,4 @@ var utils = /*#__PURE__*/Object.freeze({
   recolorImageFilter: recolorImageFilter
 });
 
-export { Model, View, goldenlayout, google, ui, utils as util };
+export { Model, View, goldenlayout, google, table, ui, utils as util };

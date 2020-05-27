@@ -22,7 +22,7 @@ class BasicDemoView extends ui.LoadingMixin(
     this.d3el.html(this.getNamedResource('lipsum'))
       .style('color', 'rgba(0,0,0,0.2)');
   }
-  getEmptyMessage () {
+  get emptyMessage () {
     return `This is a basic view; by default its contents scroll.`;
   }
 }
@@ -124,7 +124,7 @@ class ModalLauncherView extends goldenlayout.GLView {
 
 class SvgDemoView extends ui.LoadingMixin(
                           ui.EmptyStateMixin(goldenlayout.SvgGLView)) {
-  getEmptyMessage () {
+  get emptyMessage () {
     return `This is an SVG view`;
   }
   setup () {
@@ -149,7 +149,7 @@ class IFrameView extends ui.LoadingMixin(
     options.src = 'https://www.xkcd.com';
     super(options);
   }
-  getEmptyMessage () {
+  get emptyMessage () {
     return 'This is an iframe view';
   }
 }

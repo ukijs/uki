@@ -1,5 +1,5 @@
 /* globals d3 */
-import { goldenlayout, table, ui } from '../uki.esm.js';
+import { goldenlayout, table } from '../uki.esm.js';
 
 /*
  * WARNING: The capabilities in this example are still totally undocumented and
@@ -18,23 +18,22 @@ const data = [
   { this: 7, is: 1, a: parseInt('NaN'), test: null, table: undefined }
 ];
 
-class FlexDemoView extends goldenlayout.GLMixin(table.FlexTableView) {
-  getHeaders () {
-    return ['this', 'is', 'a', 'test', 'table'];
-  }
-  getRows () {
+class BaseDemoView extends goldenlayout.GLMixin(table.BaseTableView) {
+  getRawRows () {
     return data;
   }
-  showTooltip (tooltipArgs) {
-    // Highly recommended, but not required, to override this function to reuse
-    // an existing global tooltip instead of create a new one
-    window.tooltip.show(tooltipArgs);
+}
+
+class FlexDemoView extends goldenlayout.GLMixin(table.FlexTableView) {
+  getRawRows () {
+    return data;
   }
 }
 
 class RootView extends goldenlayout.GLRootView {
   constructor (options) {
     options.viewClassLookup = {
+      BaseDemoView,
       FlexDemoView
     };
     options.glSettings = {
@@ -70,4 +69,3 @@ class RootView extends goldenlayout.GLRootView {
 }
 
 window.rootView = new RootView({ d3el: d3.select('#glRoot') });
-window.tooltip = new ui.TooltipView({ d3el: d3.select('#tooltipLayer') });

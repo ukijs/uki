@@ -1,5 +1,4 @@
-.FlexTableView {
-  padding-left: 2em;
+.BaseTableView {
   table {
     border-collapse: collapse;
     font-size: 10.5pt;
@@ -14,6 +13,7 @@
     padding: 2px;
     & > div {
       max-height: 4em;
+      max-width: 5em;
       overflow: hidden;
       text-overflow: ellipsis;
     }
@@ -21,10 +21,5 @@
   th {
     position: sticky;
     top: -1px;
-  }
-  .attributeSelector {
-    position: absolute;
-    left: 0px;
-    top: 0px;
   }
 }
