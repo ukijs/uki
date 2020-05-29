@@ -7,8 +7,8 @@ import { goldenlayout, ui } from '../uki.esm.js';
  */
 
 /* eslint-disable indent */
-class BasicDemoView extends ui.LoadingMixin(
-                            ui.EmptyStateMixin(goldenlayout.GLView)) {
+class BasicDemoView extends ui.LoadingViewMixin(
+                            ui.EmptyStateViewMixin(goldenlayout.GLView)) {
   constructor (options) {
     options.resources = [{
       type: 'text',
@@ -18,7 +18,7 @@ class BasicDemoView extends ui.LoadingMixin(
     super(options);
   }
   setup () {
-    super.setup();
+    super.setup(...arguments);
     this.d3el.html(this.getNamedResource('lipsum'))
       .style('color', 'rgba(0,0,0,0.2)');
   }
@@ -122,13 +122,13 @@ class ModalLauncherView extends goldenlayout.GLView {
   }
 }
 
-class SvgDemoView extends ui.LoadingMixin(
-                          ui.EmptyStateMixin(goldenlayout.SvgGLView)) {
+class SvgDemoView extends ui.LoadingViewMixin(
+                          ui.EmptyStateViewMixin(goldenlayout.SvgGLView)) {
   get emptyMessage () {
     return `This is an SVG view`;
   }
   setup () {
-    super.setup();
+    super.setup(...arguments);
     const circle = this.d3el.append('circle').attr('r', 20);
     this.d3el.on('mousemove', function () {
       const coords = d3.mouse(this);
@@ -142,9 +142,9 @@ class SvgDemoView extends ui.LoadingMixin(
   }
 }
 
-class IFrameView extends ui.LoadingMixin(
-                         ui.EmptyStateMixin(
-                         goldenlayout.IFrameGLMixin(goldenlayout.GLView))) {
+class IFrameView extends ui.LoadingViewMixin(
+                         ui.EmptyStateViewMixin(
+                         goldenlayout.IFrameGLViewMixin(goldenlayout.GLView))) {
   constructor (options) {
     options.src = 'https://www.xkcd.com';
     super(options);

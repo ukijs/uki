@@ -1,5 +1,5 @@
-import { BaseTableView, BaseTableMixin } from './BaseTableView/BaseTableView.js';
-import { FlexTableView, FlexTableMixin } from './FlexTableView/FlexTableView.js';
+import { BaseTableView, BaseTableViewMixin } from './BaseTableView/BaseTableView.js';
+import { FlexTableView, FlexTableViewMixin } from './FlexTableView/FlexTableView.js';
 
-export { BaseTableView, BaseTableMixin };
-export { FlexTableView, FlexTableMixin };
+export { BaseTableView, BaseTableViewMixin };
+export { FlexTableView, FlexTableViewMixin };

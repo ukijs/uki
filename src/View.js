@@ -70,8 +70,8 @@ class View extends Model {
     });
   }
 
-  setup (d3el) {}
-  draw (d3el) {}
+  setup (d3el = this.d3el) {}
+  draw (d3el = this.d3el) {}
   updateContainerCharacteristics (d3el) {
     this.emSize = parseFloat(d3el.style('font-size'));
     this.scrollBarSize = this.computeScrollBarSize(d3el);

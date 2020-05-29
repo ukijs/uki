@@ -1,24 +1,49 @@
-const createMixinAndDefault = function (mixinName, DefaultBaseClass, coreClassDefFunc, requireDefault = false) {
-  const Mixin = function (superclass) {
-    if (superclass instanceof Mixin) {
-      return superclass;
+const createMixinAndDefault = function ({
+  DefaultSuperClass = Object,
+  classDefFunc,
+  requireDefault = true,
+  allowRemixinHandler = () => false,
+  mixedInstanceOfDefault = true
+}) {
+  // Mixin function
+  const Mixin = function (SuperClass) {
+    if (SuperClass instanceof Mixin && !allowRemixinHandler(SuperClass)) {
+      // If the same mixin is used more than once, generally we don't want to
+      // remix; allowRemixinHandler can return true if we really allow for this,
+      // and/or do special things in the event of a remix
+      return SuperClass;
     }
+    // Mixed class definition can inherit any arbitrary SuperClass...
+    const MixedClass = classDefFunc(SuperClass);
     if (requireDefault &&
-        superclass !== DefaultBaseClass &&
-        !(superclass.prototype instanceof DefaultBaseClass)) {
-      throw new Error(`${mixinName} must inherit from ${DefaultBaseClass.name}`);
+        SuperClass !== DefaultSuperClass &&
+        !(SuperClass.prototype instanceof DefaultSuperClass)) {
+      // ... but in most cases, we require that it EVENTUALLY inherits from
+      // DefaultSuperClass. Can be overridden with requireDefault
+      throw new Error(`${MixedClass.name} must inherit from ${DefaultSuperClass.name}`);
     }
-    const CoreClass = coreClassDefFunc(superclass);
-    CoreClass.prototype[`_instanceOf${mixinName}`] = true;
-    return CoreClass;
+    // Add a hidden property to the mixed class so we can handle instanceof
+    // checks properly
+    MixedClass.prototype[`_instanceOf${MixedClass.name}`] = true;
+    return MixedClass;
   };
+  // Default class definition inherits directly from DefaultSuperClass
+  const DefaultClass = Mixin(DefaultSuperClass);
+  // Make the Mixin function behave like a class for instanceof Mixin checks
   Object.defineProperty(Mixin, Symbol.hasInstance, {
-    value: i => !!i[`_instanceOf${mixinName}`]
+    value: i => !!i[`_instanceOf${DefaultClass.name}`]
   });
-  const DefaultClass = Mixin(DefaultBaseClass);
+  if (mixedInstanceOfDefault) {
+    // Make instanceof DefaultClass true for anything that technically is only
+    // an instanceof Mixin
+    Object.defineProperty(DefaultClass, Symbol.hasInstance, {
+      value: i => !!i[`_instanceOf${DefaultClass.name}`]
+    });
+  }
+  // Return both the default class and the mixin function
   const wrapper = {};
   wrapper[DefaultClass.name] = DefaultClass;
-  wrapper[mixinName] = Mixin;
+  wrapper[DefaultClass.name + 'Mixin'] = Mixin;
   return wrapper;
 };
 

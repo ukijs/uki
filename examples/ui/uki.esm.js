@@ -366,8 +366,8 @@ class View extends Model {
     });
   }
 
-  setup (d3el) {}
-  draw (d3el) {}
+  setup (d3el = this.d3el) {}
+  draw (d3el = this.d3el) {}
   updateContainerCharacteristics (d3el) {
     this.emSize = parseFloat(d3el.style('font-size'));
     this.scrollBarSize = this.computeScrollBarSize(d3el);
@@ -407,440 +407,526 @@ class View extends Model {
   }
 }
 
-const createMixinAndDefault = function (mixinName, DefaultBaseClass, coreClassDefFunc, requireDefault = false) {
-  const Mixin = function (superclass) {
-    if (superclass instanceof Mixin) {
-      return superclass;
+const createMixinAndDefault = function ({
+  DefaultSuperClass = Object,
+  classDefFunc,
+  requireDefault = true,
+  allowRemixinHandler = () => false,
+  mixedInstanceOfDefault = true
+}) {
+  // Mixin function
+  const Mixin = function (SuperClass) {
+    if (SuperClass instanceof Mixin && !allowRemixinHandler(SuperClass)) {
+      // If the same mixin is used more than once, generally we don't want to
+      // remix; allowRemixinHandler can return true if we really allow for this,
+      // and/or do special things in the event of a remix
+      return SuperClass;
     }
+    // Mixed class definition can inherit any arbitrary SuperClass...
+    const MixedClass = classDefFunc(SuperClass);
     if (requireDefault &&
-        superclass !== DefaultBaseClass &&
-        !(superclass.prototype instanceof DefaultBaseClass)) {
-      throw new Error(`${mixinName} must inherit from ${DefaultBaseClass.name}`);
+        SuperClass !== DefaultSuperClass &&
+        !(SuperClass.prototype instanceof DefaultSuperClass)) {
+      // ... but in most cases, we require that it EVENTUALLY inherits from
+      // DefaultSuperClass. Can be overridden with requireDefault
+      throw new Error(`${MixedClass.name} must inherit from ${DefaultSuperClass.name}`);
     }
-    const CoreClass = coreClassDefFunc(superclass);
-    CoreClass.prototype[`_instanceOf${mixinName}`] = true;
-    return CoreClass;
+    // Add a hidden property to the mixed class so we can handle instanceof
+    // checks properly
+    MixedClass.prototype[`_instanceOf${MixedClass.name}`] = true;
+    return MixedClass;
   };
+  // Default class definition inherits directly from DefaultSuperClass
+  const DefaultClass = Mixin(DefaultSuperClass);
+  // Make the Mixin function behave like a class for instanceof Mixin checks
   Object.defineProperty(Mixin, Symbol.hasInstance, {
-    value: i => !!i[`_instanceOf${mixinName}`]
+    value: i => !!i[`_instanceOf${DefaultClass.name}`]
   });
-  const DefaultClass = Mixin(DefaultBaseClass);
+  if (mixedInstanceOfDefault) {
+    // Make instanceof DefaultClass true for anything that technically is only
+    // an instanceof Mixin
+    Object.defineProperty(DefaultClass, Symbol.hasInstance, {
+      value: i => !!i[`_instanceOf${DefaultClass.name}`]
+    });
+  }
+  // Return both the default class and the mixin function
   const wrapper = {};
   wrapper[DefaultClass.name] = DefaultClass;
-  wrapper[mixinName] = Mixin;
+  wrapper[DefaultClass.name + 'Mixin'] = Mixin;
   return wrapper;
 };
 
-const RestylableMixin = function (superclass, defaultStyle, namespace, omitNamespace = false) {
-  if (superclass instanceof RestylableMixin) {
-    superclass.prototype._restylableSheets[namespace] = {
+const ThemeableMixin = function ({
+  SuperClass,
+  defaultStyle, // Raw text of default stylesheet
+  className, // AKA "module" in SMACSS style; themed views should namespace all their default styles with this string
+  defaultSheetType = 'css',
+  cnNotOnD3el = false // By default, Themed views will have the className set as a class name on the view's d3el; this prevents that
+}) {
+  if (SuperClass instanceof ThemeableMixin) {
+    SuperClass.prototype._defaultThemeSheets[className] = {
       sheet: defaultStyle,
-      omitNamespace
+      type: defaultSheetType,
+      cnNotOnD3el
     };
-    return superclass;
+    return SuperClass;
   }
-  class Restylable extends superclass {
+  class ThemeableView extends SuperClass {
     constructor (options = {}) {
-      if (options.stylesheets !== null) {
+      // setting theme to null prevents the default stylesheet from loading
+      // (for themes that want to build their styles from scratch)
+      if (options.theme !== null) {
         options.resources = options.resources || [];
-        for (const { sheet } of Object.values(Restylable.prototype._restylableSheets)) {
-          options.resources.push({ type: 'css', raw: sheet });
+        for (const { sheet, type } of Object.values(ThemeableView.prototype._defaultThemeSheets)) {
+          const resource = { type, raw: sheet };
+          // leaving theme as undefined applies the default stylesheet, but
+          // no overrides (for no theme, or themes that only want to override
+          // the defaults after the fact)
+          if (options.theme) {
+            // Setting theme as an object allows themes to override less or CSS
+            // variables from javascript. Note that the appropriate @ or --
+            // prefixes are still required
+            if (type === 'less') {
+              resource.lessArgs = { modifyVars: options.theme };
+            } else {
+              resource.then = () => {
+                const root = document.documentElement;
+                for (const [cssVar, override] of Object.entries(options.theme)) {
+                  root.style.setProperty(cssVar, override);
+                }
+              };
+            }
+          }
+          options.resources.push(resource);
         }
       }
       super(options);
     }
     setup () {
-      super.setup();
-      for (const [namespace, { omitNamespace }] of Object.entries(Restylable.prototype._restylableSheets)) {
-        if (omitNamespace === false) {
-          this.d3el.classed(namespace, true);
+      super.setup(...arguments);
+      for (const [className, { cnNotOnD3el }] of Object.entries(ThemeableView.prototype._defaultThemeSheets)) {
+        if (cnNotOnD3el === false) {
+          // The className applies to the view's d3el
+          this.d3el.classed(className, true);
         }
       }
     }
   }
-  Restylable.prototype._instanceOfRestylableMixin = true;
-  Restylable.prototype._restylableSheets = {};
-  Restylable.prototype._restylableSheets[namespace] = {
+  ThemeableView.prototype._instanceOfThemeableMixin = true;
+  ThemeableView.prototype._defaultThemeSheets = {};
+  ThemeableView.prototype._defaultThemeSheets[className] = {
     sheet: defaultStyle,
-    omitNamespace
+    type: defaultSheetType,
+    cnNotOnD3el
   };
-  return Restylable;
+  return ThemeableView;
 };
-Object.defineProperty(RestylableMixin, Symbol.hasInstance, {
-  value: i => !!i._instanceOfRestylableMixin
+Object.defineProperty(ThemeableMixin, Symbol.hasInstance, {
+  value: i => !!i._instanceOfThemeableMixin
 });
 
 var defaultStyle = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nhttp://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8\nhttp://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8\n*/\n/*\nColor meanings:\n*/\n/*\nDummy class that exposes colors for assignment to classes in Javascript:\n*/\n.classColorList {\n  filter: url(#recolorImageTo1B9E77);\n  filter: url(#recolorImageToD95F02);\n  filter: url(#recolorImageTo7570B3);\n  filter: url(#recolorImageToE7298A);\n  filter: url(#recolorImageTo66A61E);\n  filter: url(#recolorImageToE6AB02);\n  filter: url(#recolorImageToA6761D);\n  filter: url(#recolorImageToB3E2CD);\n  filter: url(#recolorImageToFDCDAC);\n  filter: url(#recolorImageToCBD5E8);\n  filter: url(#recolorImageToF4CAE4);\n  filter: url(#recolorImageToE6F5C9);\n  filter: url(#recolorImageToFFF2AE);\n  filter: url(#recolorImageToF1E2CC);\n}\n/*\nGradients:\n*/\n.GLRootView .lm_goldenlayout {\n  background: transparent;\n}\n.GLRootView .lm_content {\n  background: #F7F7F7;\n  border: 1px solid #BDBDBD;\n}\n.GLRootView .lm_dragProxy .lm_content {\n  box-shadow: 2px 2px 4px rgba(37, 37, 37, 0.2);\n}\n.GLRootView .lm_dropTargetIndicator {\n  box-shadow: inset 0 0 30px rgba(37, 37, 37, 0.4);\n  outline: 1px dashed #BDBDBD;\n}\n.GLRootView .lm_dropTargetIndicator .lm_inner {\n  background: #252525;\n  opacity: 0.1;\n}\n.GLRootView .lm_splitter {\n  background: #BDBDBD;\n  opacity: 0.001;\n  transition: opacity 200ms ease;\n}\n.GLRootView .lm_splitter:hover,\n.GLRootView .lm_splitter.lm_dragging {\n  background: #BDBDBD;\n  opacity: 1;\n}\n.GLRootView .lm_header {\n  height: 20px;\n}\n.GLRootView .lm_header .lm_tab {\n  font-family: Arial, sans-serif;\n  font-size: 12px;\n  color: #525252;\n  background: #D9D9D9;\n  margin-right: 2px;\n  padding-bottom: 4px;\n  border: 1px solid #BDBDBD;\n  border-bottom: none;\n}\n.GLRootView .lm_header .lm_tab .lm_title {\n  padding-top: 1px;\n}\n.GLRootView .lm_header .lm_tab .lm_close_tab {\n  width: 11px;\n  height: 11px;\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAKUlEQVR4nGNgYGD4z4Af/Mdg4FKASwCnDf8JKSBoAtEmEXQTQd8RDCcA6+4Q8OvIgasAAAAASUVORK5CYII=\");\n  background-position: center center;\n  background-repeat: no-repeat;\n  top: 4px;\n  right: 6px;\n  opacity: 0.4;\n}\n.GLRootView .lm_header .lm_tab .lm_close_tab:hover {\n  opacity: 1;\n}\n.GLRootView .lm_header .lm_tab.lm_active {\n  border-bottom: none;\n  box-shadow: 2px -2px 2px -2px rgba(37, 37, 37, 0.2);\n  padding-bottom: 5px;\n}\n.GLRootView .lm_header .lm_tab.lm_active .lm_close_tab {\n  opacity: 1;\n}\n.GLRootView .lm_dragProxy.lm_right .lm_header .lm_tab.lm_active,\n.GLRootView .lm_stack.lm_right .lm_header .lm_tab.lm_active {\n  box-shadow: 2px -2px 2px -2px rgba(37, 37, 37, 0.2);\n}\n.GLRootView .lm_dragProxy.lm_bottom .lm_header .lm_tab.lm_active,\n.GLRootView .lm_stack.lm_bottom .lm_header .lm_tab.lm_active {\n  box-shadow: 2px 2px 2px -2px rgba(37, 37, 37, 0.2);\n}\n.GLRootView .lm_selected .lm_header {\n  background-color: #452500;\n}\n.GLRootView .lm_tab:hover,\n.GLRootView .lm_tab.lm_active {\n  background: #F7F7F7;\n  color: #252525;\n}\n.GLRootView .lm_header .lm_controls .lm_tabdropdown:before {\n  color: #252525;\n}\n.GLRootView .lm_controls > li {\n  position: relative;\n  background-position: center center;\n  background-repeat: no-repeat;\n  opacity: 0.4;\n  transition: opacity 300ms ease;\n}\n.GLRootView .lm_controls > li:hover {\n  opacity: 1;\n}\n.GLRootView .lm_controls .lm_popout {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAANUlEQVR4nI2QMQoAMAwCz5L/f9mOzZIaN0E9UDyZhaaQz6atgBHgambEJ5wBKoS0WaIvfT+6K2MIECN19MAAAAAASUVORK5CYII=\");\n}\n.GLRootView .lm_controls .lm_maximise {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAIklEQVR4nGNkYGD4z0AAMBFSAAOETPpPlEmDUREjAxHhBABPvAQLFv3qngAAAABJRU5ErkJggg==\");\n}\n.GLRootView .lm_controls .lm_close {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAKUlEQVR4nGNgYGD4z4Af/Mdg4FKASwCnDf8JKSBoAtEmEXQTQd8RDCcA6+4Q8OvIgasAAAAASUVORK5CYII=\");\n}\n.GLRootView .lm_controls .lm_dock {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1MAAA6mAAADqYAAAXb5JfxUYAAAC6SURBVHjavNRRFYIwFAbgLwJRaCBRaCIRbGAEaSARaKANpMF8GedM3BSV4wMvY/u4+++GEIItns8m0/wMoUHA8WsIFS7oMOawtVCPPkGfsFeLa+ywx4RqUeEDVgIuMY8R11zIcZthfpfLYsKQVpCZc1p+oFTRhLbQuVvMrHqbUQmLVXQftT/JoE3GhtKhLCFtRLq5sphNQL0KSpB2sc0zrquuyBLJZFa/hUpI2vZVtx+HErL5b+Qv0H0Axmb86JFNd6MAAAAASUVORK5CYII=\");\n  transform: rotate(-45deg);\n  transition: transform 300ms;\n}\n.GLRootView .lm_stack.lm_docked .lm_controls .lm_dock {\n  transform: rotate(0deg);\n}\n.GLRootView .lm_stack.lm_docked > .lm_items {\n  border-color: #BDBDBD;\n  border-image: linear-gradient(to right, #BDBDBD 1%, white 100%);\n  box-shadow: 2px 2px 2px -2px rgba(37, 37, 37, 0.2);\n}\n.GLRootView .lm_maximised .lm_header {\n  background-color: white;\n}\n.GLRootView .lm_maximised .lm_controls .lm_maximise {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAJklEQVR4nGP8//8/AyHARFDFUFbEwsDAwMDIyIgzHP7//89IlEkApSkHEScJTKoAAAAASUVORK5CYII=\");\n}\n.GLRootView .lm_transition_indicator {\n  background-color: #252525;\n  border: 1px dashed #BDBDBD;\n}\n.GLRootView .lm_popin {\n  cursor: pointer;\n}\n.GLRootView .lm_popin .lm_bg {\n  background: #252525;\n  opacity: 0.7;\n}\n.GLRootView .lm_popin .lm_icon {\n  background-image: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAAJCAYAAADpeqZqAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH5AIMBA8Y4uozqQAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUHAAAAQ0lEQVQY072OMQ6AMAzEzhH//7I7oKKKoSULXjI5Z5KokgXAbEANoMq8WwGs3FOcvq/Ul5w311zqSNVdefJ+kUjSzhteChsRI/jXegAAAABJRU5ErkJggg==\");\n  background-position: center center;\n  background-repeat: no-repeat;\n  opacity: 0.7;\n}\n.GLRootView .lm_popin:hover .lm_icon {\n  opacity: 1;\n}\n";
 
 /* globals GoldenLayout */
 
-const { GLRootView, GLRootMixin } = createMixinAndDefault('GLRootMixin', View, superclass => {
-  class GLRootView extends RestylableMixin(superclass, defaultStyle, 'GLRootView') {
-    constructor (options) {
-      options.resources = options.resources || [];
+const { GLRootView, GLRootViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: View,
+  classDefFunc: SuperClass => {
+    class GLRootView extends ThemeableMixin({
+      SuperClass, defaultStyle, className: 'GLRootView'
+    }) {
+      constructor (options) {
+        options.resources = options.resources || [];
 
-      // Core CSS Styles
-      if (options.glCoreStyleResource) {
-        options.resources.unshift(options.glCoreStyleResource);
-      } else {
-        options.resources.unshift({
-          'type': 'css',
-          'url': 'https://golden-layout.com/files/latest/css/goldenlayout-base.css'
-        });
-      }
-
-      // JS Dependencies if they aren't already loaded
-      if (!window.jQuery) {
-        options.resources.push({
-          type: 'js',
-          url: 'https://code.jquery.com/jquery-3.4.1.min.js',
-          extraAttributes: {
-            integrity: 'sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=',
-            crossorigin: 'anonymous'
-          },
-          name: 'jQuery'
-        });
-      }
-      if (!window.GoldenLayout) {
-        options.resources.push({
-          type: 'js',
-          url: 'https://golden-layout.com/files/latest/js/goldenlayout.min.js',
-          loadAfter: ['jQuery']
-        });
-      }
-      options.suppressInitialRender = true;
-      super(options);
-
-      this.glSettings = options.glSettings;
-      this.viewClassLookup = options.viewClassLookup;
-      this.ready.then(() => {
-        this.setupLayout();
-        this.render();
-      });
-    }
-    setupLayout () {
-      this.goldenLayout = new GoldenLayout(this.glSettings, this.d3el.node());
-      this.views = {};
-      for (const [className, ViewClass] of Object.entries(this.viewClassLookup)) {
-        const self = this;
-        this.goldenLayout.registerComponent(className, function (container, state) {
-          const view = new ViewClass({
-            glContainer: container,
-            glState: state
+        // Core CSS Styles
+        if (options.glCoreStyleResource) {
+          options.resources.unshift(options.glCoreStyleResource);
+        } else {
+          options.resources.unshift({
+            'type': 'css',
+            'url': 'https://golden-layout.com/files/latest/css/goldenlayout-base.css'
           });
-          self.views[className] = view;
+        }
+
+        // JS Dependencies if they aren't already loaded
+        if (!window.jQuery) {
+          options.resources.push({
+            type: 'js',
+            url: 'https://code.jquery.com/jquery-3.4.1.min.js',
+            extraAttributes: {
+              integrity: 'sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=',
+              crossorigin: 'anonymous'
+            },
+            name: 'jQuery'
+          });
+        }
+        if (!window.GoldenLayout) {
+          options.resources.push({
+            type: 'js',
+            url: 'https://golden-layout.com/files/latest/js/goldenlayout.min.js',
+            loadAfter: ['jQuery']
+          });
+        }
+        options.suppressInitialRender = true;
+        super(options);
+
+        this.glSettings = options.glSettings;
+        this.viewClassLookup = options.viewClassLookup;
+        this.ready.then(() => {
+          this.setupLayout();
+          this.render();
         });
       }
-      window.addEventListener('resize', () => {
-        this.goldenLayout.updateSize();
-        this.render();
-      });
-    }
-    setup () {
-      super.setup();
-      // Don't do init() until setup() because GoldenLayout sometimes misbehaves
-      // if LESS hasn't finished loading
-      this.goldenLayout.init();
-      this.renderAllViews();
-    }
-    draw () {
-      super.draw();
-      this.renderAllViews();
-    }
-    renderAllViews () {
-      for (const view of Object.values(this.views)) {
-        view.render();
+      setupLayout () {
+        this.goldenLayout = new GoldenLayout(this.glSettings, this.d3el.node());
+        this.views = {};
+        for (const [className, ViewClass] of Object.entries(this.viewClassLookup)) {
+          const self = this;
+          this.goldenLayout.registerComponent(className, function (container, state) {
+            const view = new ViewClass({
+              glContainer: container,
+              glState: state
+            });
+            self.views[className] = view;
+          });
+        }
+        window.addEventListener('resize', () => {
+          this.goldenLayout.updateSize();
+          this.render();
+        });
+      }
+      setup () {
+        super.setup(...arguments);
+        // Don't do init() until setup() because GoldenLayout sometimes misbehaves
+        // if LESS hasn't finished loading
+        this.goldenLayout.init();
+        this.renderAllViews();
+      }
+      draw () {
+        super.draw(...arguments);
+        this.renderAllViews();
+      }
+      renderAllViews () {
+        for (const view of Object.values(this.views)) {
+          view.render();
+        }
       }
     }
+    return GLRootView;
   }
-  return GLRootView;
-}, true);
+});
 
-const { Introspectable, IntrospectableMixin } = createMixinAndDefault('IntrospectableMixin', Object, (superclass) => {
-  class Introspectable extends superclass {
-    get type () {
-      return this.constructor.type;
+const { Introspectable, IntrospectableMixin } = createMixinAndDefault({
+  DefaultSuperClass: Object,
+  requireDefault: false,
+  classDefFunc: SuperClass => {
+    class Introspectable extends SuperClass {
+      get type () {
+        return this.constructor.type;
+      }
+      get lowerCamelCaseType () {
+        return this.constructor.lowerCamelCaseType;
+      }
+      get humanReadableType () {
+        return this.constructor.humanReadableType;
+      }
     }
-    get lowerCamelCaseType () {
-      return this.constructor.lowerCamelCaseType;
-    }
-    get humanReadableType () {
-      return this.constructor.humanReadableType;
-    }
+    Object.defineProperty(Introspectable, 'type', {
+      // This can / should be overridden by subclasses that follow a common string
+      // pattern, such as RootToken, KeysToken, ParentToken, etc.
+      configurable: true,
+      get () { return this.name; }
+    });
+    Object.defineProperty(Introspectable, 'lowerCamelCaseType', {
+      get () {
+        const temp = this.type;
+        return temp.replace(/./, temp[0].toLocaleLowerCase());
+      }
+    });
+    Object.defineProperty(Introspectable, 'humanReadableType', {
+      get () {
+        // CamelCase to Sentence Case
+        return this.type.replace(/([a-z])([A-Z])/g, '$1 $2');
+      }
+    });
+    return Introspectable;
   }
-  Object.defineProperty(Introspectable, 'type', {
-    // This can / should be overridden by subclasses that follow a common string
-    // pattern, such as RootToken, KeysToken, ParentToken, etc.
-    configurable: true,
-    get () { return this.name; }
-  });
-  Object.defineProperty(Introspectable, 'lowerCamelCaseType', {
-    get () {
-      const temp = this.type;
-      return temp.replace(/./, temp[0].toLocaleLowerCase());
-    }
-  });
-  Object.defineProperty(Introspectable, 'humanReadableType', {
-    get () {
-      // CamelCase to Sentence Case
-      return this.type.replace(/([a-z])([A-Z])/g, '$1 $2');
-    }
-  });
-  return Introspectable;
 });
 
 var defaultStyle$1 = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nhttp://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8\nhttp://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8\n*/\n/*\nColor meanings:\n*/\n/*\nDummy class that exposes colors for assignment to classes in Javascript:\n*/\n.classColorList {\n  filter: url(#recolorImageTo1B9E77);\n  filter: url(#recolorImageToD95F02);\n  filter: url(#recolorImageTo7570B3);\n  filter: url(#recolorImageToE7298A);\n  filter: url(#recolorImageTo66A61E);\n  filter: url(#recolorImageToE6AB02);\n  filter: url(#recolorImageToA6761D);\n  filter: url(#recolorImageToB3E2CD);\n  filter: url(#recolorImageToFDCDAC);\n  filter: url(#recolorImageToCBD5E8);\n  filter: url(#recolorImageToF4CAE4);\n  filter: url(#recolorImageToE6F5C9);\n  filter: url(#recolorImageToFFF2AE);\n  filter: url(#recolorImageToF1E2CC);\n}\n/*\nGradients:\n*/\n.GLView.scrollArea {\n  position: absolute;\n  top: 0.25em;\n  left: 0.25em;\n  right: 0.25em;\n  bottom: 0.25em;\n  overflow: auto;\n}\n";
 
 /* globals d3 */
 
-const { GLView, GLMixin } = createMixinAndDefault('GLMixin', View, superclass => {
-  class GLView extends IntrospectableMixin(RestylableMixin(superclass, defaultStyle$1, 'GLView')) {
-    constructor (options) {
-      super(options);
-      this.glContainer = options.glContainer;
-      this.state = options.glState;
-      this.isHidden = false;
-      this.glContainer.on('tab', tab => {
-        this.glTabEl = d3.select(tab.element[0]);
-        this.setupTab();
-
-        // GoldenLayout creates a separate DragProxy element that needs our
-        // custom tab modifications while dragging
-        tab._dragListener.on('dragStart', () => {
-          const draggedTabElement = d3.select('.lm_dragProxy .lm_tab');
-          this.setupTab(draggedTabElement);
-          this.drawTab(draggedTabElement);
-        });
-      });
-      this.glContainer.on('open', () => {
-        this.glEl = d3.select(this.glContainer.getElement()[0]);
-        const d3el = this.setupD3El();
-        this.render(d3el);
-      });
-      this.glContainer.on('hide', () => {
-        this.isHidden = true;
-      });
-      this.glContainer.on('show', () => {
+const { GLView, GLViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: View,
+  classDefFunc: SuperClass => {
+    class GLView extends IntrospectableMixin(ThemeableMixin({
+      SuperClass, defaultStyle: defaultStyle$1, className: 'GLView'
+    })) {
+      constructor (options) {
+        super(options);
+        this.glContainer = options.glContainer;
+        this.state = options.glState;
         this.isHidden = false;
-        this.render();
-      });
-      this.glContainer.on('resize', () => this.render());
-    }
-    get title () {
-      return this.humanReadableType;
-    }
-    setupTab () {
-      this.glTabEl.classed(this.type, true);
-    }
-    drawTab () {
-      this.glTabEl.select(':scope > .lm_title')
-        .text(this.title);
-    }
-    setupD3El () {
-      // Default setup is a scrollable div; subclasses might override this
-      return this.glEl.append('div')
-        .classed('scrollArea', true);
-    }
-    getAvailableSpace (content = this.d3el) {
-      return content.node().getBoundingClientRect();
-    }
-    draw () {
-      super.draw();
-      if (this.glTabEl) {
-        this.drawTab();
+        this.glContainer.on('tab', tab => {
+          this.glTabEl = d3.select(tab.element[0]);
+          this.setupTab();
+
+          // GoldenLayout creates a separate DragProxy element that needs our
+          // custom tab modifications while dragging
+          tab._dragListener.on('dragStart', () => {
+            const draggedTabElement = d3.select('.lm_dragProxy .lm_tab');
+            this.setupTab(draggedTabElement);
+            this.drawTab(draggedTabElement);
+          });
+        });
+        this.glContainer.on('open', () => {
+          this.glEl = d3.select(this.glContainer.getElement()[0]);
+          const d3el = this.setupD3El();
+          this.render(d3el);
+        });
+        this.glContainer.on('hide', () => {
+          this.isHidden = true;
+        });
+        this.glContainer.on('show', () => {
+          this.isHidden = false;
+          this.render();
+        });
+        this.glContainer.on('resize', () => this.render());
+      }
+      get title () {
+        return this.humanReadableType;
+      }
+      setupTab () {
+        this.glTabEl.classed(this.type, true);
+      }
+      drawTab () {
+        this.glTabEl.select(':scope > .lm_title')
+          .text(this.title);
+      }
+      setupD3El () {
+        // Default setup is a scrollable div; subclasses might override this
+        return this.glEl.append('div')
+          .classed('scrollArea', true);
+      }
+      getAvailableSpace (content = this.d3el) {
+        return content.node().getBoundingClientRect();
+      }
+      draw () {
+        super.draw(...arguments);
+        if (this.glTabEl) {
+          this.drawTab();
+        }
       }
     }
+    return GLView;
   }
-  return GLView;
-}, true);
+});
 
 /* globals d3 */
 
-const { ParentSizeView, ParentSizeMixin } = createMixinAndDefault('ParentSizeMixin', View, superclass => {
-  class ParentSizeView extends superclass {
-    getBounds (parent = d3.select(this.d3el.node().parentNode)) {
-      // Temporarily set this element's size to 0,0 so that it doesn't influence
-      // it's parent's natural size
-      const previousBounds = {
-        width: this.d3el.attr('width'),
-        height: this.d3el.attr('height')
-      };
-      this.d3el
-        .attr('width', 0)
-        .attr('height', 0);
-      const bounds = parent.node().getBoundingClientRect();
-      // Restore the bounds
-      this.d3el
-        .attr('width', previousBounds.width)
-        .attr('height', previousBounds.height);
-      return bounds;
+const { ParentSizeView, ParentSizeViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: View,
+  classDefFunc: SuperClass => {
+    class ParentSizeView extends SuperClass {
+      getBounds (parent = d3.select(this.d3el.node().parentNode)) {
+        // Temporarily set this element's size to 0,0 so that it doesn't influence
+        // it's parent's natural size
+        const previousBounds = {
+          width: this.d3el.attr('width'),
+          height: this.d3el.attr('height')
+        };
+        this.d3el
+          .attr('width', 0)
+          .attr('height', 0);
+        const bounds = parent.node().getBoundingClientRect();
+        // Restore the bounds
+        this.d3el
+          .attr('width', previousBounds.width)
+          .attr('height', previousBounds.height);
+        return bounds;
+      }
+      draw () {
+        super.draw(...arguments);
+        const bounds = this.getBounds();
+        this.d3el
+          .attr('width', bounds.width)
+          .attr('height', bounds.height);
+      }
     }
-    draw () {
-      super.draw();
-      const bounds = this.getBounds();
-      this.d3el
-        .attr('width', bounds.width)
-        .attr('height', bounds.height);
-    }
+    return ParentSizeView;
   }
-  return ParentSizeView;
-}, true);
+});
 
 /* globals d3 */
 
-const { SvgView, SvgMixin } = createMixinAndDefault('SvgMixin', View, superclass => {
-  class SvgView extends ParentSizeMixin(superclass) {
-    constructor (options) {
-      options.fixedTagType = 'svg';
-      super(options);
-    }
-    download () {
-      // Adapted from https://stackoverflow.com/a/37387449/1058935
-      const containerElements = ['svg', 'g'];
-      const relevantStyles = {
-        'svg': ['width', 'height'],
-        'rect': ['fill', 'stroke', 'stroke-width', 'opacity'],
-        'p': ['font', 'opacity'],
-        '.node': ['cursor', 'opacity'],
-        'path': ['fill', 'stroke', 'stroke-width', 'opacity'],
-        'circle': ['fill', 'stroke', 'stroke-width', 'opacity'],
-        'line': ['stroke', 'stroke-width', 'opacity'],
-        'text': ['fill', 'font-size', 'text-anchor', 'opacity'],
-        'polygon': ['stroke', 'fill', 'opacity']
-      };
-      const copyStyles = (original, copy) => {
-        const tagName = original.tagName;
-        const allStyles = window.getComputedStyle(original);
-        for (const style of relevantStyles[tagName] || []) {
-          d3.select(copy).style(style, allStyles[style]);
-        }
-        if (containerElements.indexOf(tagName) !== -1) {
-          for (let i = 0; i < original.children.length; i++) {
-            copyStyles(original.children[i], copy.children[i]);
+const { SvgView, SvgViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: View,
+  classDefFunc: SuperClass => {
+    class SvgView extends ParentSizeViewMixin(SuperClass) {
+      constructor (options) {
+        options.fixedTagType = 'svg';
+        super(options);
+      }
+      download () {
+        // Adapted from https://stackoverflow.com/a/37387449/1058935
+        const containerElements = ['svg', 'g'];
+        const relevantStyles = {
+          'svg': ['width', 'height'],
+          'rect': ['fill', 'stroke', 'stroke-width', 'opacity'],
+          'p': ['font', 'opacity'],
+          '.node': ['cursor', 'opacity'],
+          'path': ['fill', 'stroke', 'stroke-width', 'opacity'],
+          'circle': ['fill', 'stroke', 'stroke-width', 'opacity'],
+          'line': ['stroke', 'stroke-width', 'opacity'],
+          'text': ['fill', 'font-size', 'text-anchor', 'opacity'],
+          'polygon': ['stroke', 'fill', 'opacity']
+        };
+        const copyStyles = (original, copy) => {
+          const tagName = original.tagName;
+          const allStyles = window.getComputedStyle(original);
+          for (const style of relevantStyles[tagName] || []) {
+            d3.select(copy).style(style, allStyles[style]);
           }
-        }
-      };
+          if (containerElements.indexOf(tagName) !== -1) {
+            for (let i = 0; i < original.children.length; i++) {
+              copyStyles(original.children[i], copy.children[i]);
+            }
+          }
+        };
 
-      const original = this.d3el.node();
-      const copy = original.cloneNode(true);
-      copyStyles(original, copy);
+        const original = this.d3el.node();
+        const copy = original.cloneNode(true);
+        copyStyles(original, copy);
 
-      const data = new window.XMLSerializer().serializeToString(copy);
-      const svg = new window.Blob([data], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(svg);
+        const data = new window.XMLSerializer().serializeToString(copy);
+        const svg = new window.Blob([data], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svg);
 
-      const link = d3.select('body')
-        .append('a')
-        .attr('download', `${this.title}.svg`)
-        .attr('href', url);
-      link.node().click();
-      link.remove();
+        const link = d3.select('body')
+          .append('a')
+          .attr('download', `${this.title}.svg`)
+          .attr('href', url);
+        link.node().click();
+        link.remove();
+      }
     }
+    return SvgView;
   }
-  return SvgView;
-}, true);
+});
 
-var defaultStyle$2 = ".lm_header .lm_tab.SvgTab {\n  padding-right: 36px;\n}\n.lm_header .lm_tab.SvgTab .downloadIcon {\n  position: absolute;\n  width: 11px;\n  height: 11px;\n  background-image: url(\"data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDE5LjIuMSwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IgoJIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA1MTIgNTEyOyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+CjxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI+Cgkuc3Qwe2ZpbGw6IzAwMDAwMDt9Cjwvc3R5bGU+CjxnPgoJPHBhdGggY2xhc3M9InN0MCIgZD0iTTYsMzU4LjVjNy43LTIxLjIsMTQuNC0yNS44LDM3LjQtMjUuOGM0MS40LDAsODIuOC0wLjEsMTI0LjIsMC4yYzQuMSwwLDksMi4yLDEyLDVjMTEuMywxMC42LDIyLDIxLjksMzMsMzIuOQoJCWMyNi4zLDI2LjEsNjAuMywyNi4yLDg2LjcsMC4xYzExLjItMTEuMSwyMi4xLTIyLjUsMzMuNy0zMy4zYzIuOC0yLjcsNy41LTQuNywxMS40LTQuN2M0MS40LTAuMyw4Mi44LTAuMiwxMjQuMi0wLjIKCQljMjMuMSwwLDI5LjcsNC42LDM3LjQsMjUuOGMwLDM0LjIsMCw2OC4zLDAsMTAyLjVjLTcuNywyMC44LTE0LjIsMjUuMS0zNywyNS4xYy0xNDIsMC0yODQsMC00MjYsMGMtMjIuOCwwLTI5LjMtNC40LTM3LTI1LjEKCQlDNiw0MjYuOCw2LDM5Mi43LDYsMzU4LjV6IE0zOTAsNDI4LjZjLTAuMS0xMC4xLTguNi0xOC43LTE4LjYtMTguOWMtMTAuMi0wLjItMTkuMyw4LjktMTkuMiwxOS4xYzAuMSwxMC40LDkuMSwxOSwxOS41LDE4LjcKCQlDMzgxLjgsNDQ3LjMsMzkwLjEsNDM4LjcsMzkwLDQyOC42eiBNNDQ3LjksNDQ3LjdjOS45LDAsMTguOC04LjcsMTkuMS0xOC42YzAuMy0xMC05LTE5LjQtMTkuMS0xOS40Yy0xMC4xLDAtMTkuMyw5LjQtMTkuMSwxOS40CgkJQzQyOS4xLDQzOSw0MzgsNDQ3LjcsNDQ3LjksNDQ3Ljd6Ii8+Cgk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMzEzLjUsMTc5LjNjMTkuOSwwLDM4LjgsMCw1Ny42LDBjNS40LDAsMTAuOSwwLjEsMTYuMywwYzkuNC0wLjMsMTYuNywyLjgsMjAuNiwxMS45CgkJYzMuOSw5LjMsMC40LDE2LjMtNi4zLDIyLjljLTQxLjEsNDAuOS04Miw4MS45LTEyMywxMjIuOWMtMjAuMywyMC4zLTI1LjIsMjAuMy00NS40LDAuMWMtNDAuOC00MC44LTgxLjYtODEuNi0xMjIuNS0xMjIuMwoJCWMtNi43LTYuNy0xMS0xMy42LTctMjMuNGMzLjctOC44LDEwLjUtMTIuMSwxOS43LTEyLjFjMjIsMC4xLDQ0LDAsNjYsMGMyLjgsMCw1LjUsMCw4LjksMGMwLTMuOSwwLTYuNywwLTkuNQoJCWMwLTQwLjEsMC04MC4yLDAtMTIwLjNjMC0xNi40LDcuMi0yMy41LDIzLjctMjMuNmMyMi44LTAuMSw0NS41LTAuMSw2OC4zLDBjMTUuOSwwLjEsMjMsNy40LDIzLjEsMjMuNGMwLDQwLjEsMCw4MC4yLDAsMTIwLjMKCQlDMzEzLjUsMTcyLjUsMzEzLjUsMTc1LjMsMzEzLjUsMTc5LjN6Ii8+CjwvZz4KPC9zdmc+Cg==\");\n  background-position: center center;\n  background-repeat: no-repeat;\n  background-size: 11px 11px;\n  top: 4px;\n  right: 6px;\n  margin-right: 13px;\n  opacity: 0.4;\n}\n.lm_header .lm_tab.SvgTab .downloadIcon:hover {\n  opacity: 1;\n}\n";
+var defaultStyle$2 = ".SvgGLTab {\n  padding-right: 36px;\n}\n.SvgGLTab .downloadIcon {\n  position: absolute;\n  width: 11px;\n  height: 11px;\n  background-image: url(\"data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDE5LjIuMSwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IgoJIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA1MTIgNTEyOyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+CjxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI+Cgkuc3Qwe2ZpbGw6IzAwMDAwMDt9Cjwvc3R5bGU+CjxnPgoJPHBhdGggY2xhc3M9InN0MCIgZD0iTTYsMzU4LjVjNy43LTIxLjIsMTQuNC0yNS44LDM3LjQtMjUuOGM0MS40LDAsODIuOC0wLjEsMTI0LjIsMC4yYzQuMSwwLDksMi4yLDEyLDVjMTEuMywxMC42LDIyLDIxLjksMzMsMzIuOQoJCWMyNi4zLDI2LjEsNjAuMywyNi4yLDg2LjcsMC4xYzExLjItMTEuMSwyMi4xLTIyLjUsMzMuNy0zMy4zYzIuOC0yLjcsNy41LTQuNywxMS40LTQuN2M0MS40LTAuMyw4Mi44LTAuMiwxMjQuMi0wLjIKCQljMjMuMSwwLDI5LjcsNC42LDM3LjQsMjUuOGMwLDM0LjIsMCw2OC4zLDAsMTAyLjVjLTcuNywyMC44LTE0LjIsMjUuMS0zNywyNS4xYy0xNDIsMC0yODQsMC00MjYsMGMtMjIuOCwwLTI5LjMtNC40LTM3LTI1LjEKCQlDNiw0MjYuOCw2LDM5Mi43LDYsMzU4LjV6IE0zOTAsNDI4LjZjLTAuMS0xMC4xLTguNi0xOC43LTE4LjYtMTguOWMtMTAuMi0wLjItMTkuMyw4LjktMTkuMiwxOS4xYzAuMSwxMC40LDkuMSwxOSwxOS41LDE4LjcKCQlDMzgxLjgsNDQ3LjMsMzkwLjEsNDM4LjcsMzkwLDQyOC42eiBNNDQ3LjksNDQ3LjdjOS45LDAsMTguOC04LjcsMTkuMS0xOC42YzAuMy0xMC05LTE5LjQtMTkuMS0xOS40Yy0xMC4xLDAtMTkuMyw5LjQtMTkuMSwxOS40CgkJQzQyOS4xLDQzOSw0MzgsNDQ3LjcsNDQ3LjksNDQ3Ljd6Ii8+Cgk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMzEzLjUsMTc5LjNjMTkuOSwwLDM4LjgsMCw1Ny42LDBjNS40LDAsMTAuOSwwLjEsMTYuMywwYzkuNC0wLjMsMTYuNywyLjgsMjAuNiwxMS45CgkJYzMuOSw5LjMsMC40LDE2LjMtNi4zLDIyLjljLTQxLjEsNDAuOS04Miw4MS45LTEyMywxMjIuOWMtMjAuMywyMC4zLTI1LjIsMjAuMy00NS40LDAuMWMtNDAuOC00MC44LTgxLjYtODEuNi0xMjIuNS0xMjIuMwoJCWMtNi43LTYuNy0xMS0xMy42LTctMjMuNGMzLjctOC44LDEwLjUtMTIuMSwxOS43LTEyLjFjMjIsMC4xLDQ0LDAsNjYsMGMyLjgsMCw1LjUsMCw4LjksMGMwLTMuOSwwLTYuNywwLTkuNQoJCWMwLTQwLjEsMC04MC4yLDAtMTIwLjNjMC0xNi40LDcuMi0yMy41LDIzLjctMjMuNmMyMi44LTAuMSw0NS41LTAuMSw2OC4zLDBjMTUuOSwwLjEsMjMsNy40LDIzLjEsMjMuNGMwLDQwLjEsMCw4MC4yLDAsMTIwLjMKCQlDMzEzLjUsMTcyLjUsMzEzLjUsMTc1LjMsMzEzLjUsMTc5LjN6Ii8+CjwvZz4KPC9zdmc+Cg==\");\n  background-position: center center;\n  background-repeat: no-repeat;\n  background-size: 11px 11px;\n  top: 4px;\n  right: 6px;\n  margin-right: 13px;\n  opacity: 0.4;\n}\n.SvgGLTab .downloadIcon:hover {\n  opacity: 1;\n}\n";
 
 /* globals d3 */
 
-const { SvgGLView, SvgGLMixin } = createMixinAndDefault('SvgGLMixin', GLView, superclass => {
-  class SvgGLView extends SvgMixin(RestylableMixin(superclass, defaultStyle$2, 'SvgGLView', true)) {
-    setupD3El () {
-      return this.glEl.append('svg')
-        .attr('src', this.src)
-        .on('load', () => { this.trigger('viewLoaded'); });
+const { SvgGLView, SvgGLViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: GLView,
+  classDefFunc: SuperClass => {
+    class SvgGLView extends SvgViewMixin(ThemeableMixin({
+      SuperClass, defaultStyle: defaultStyle$2, className: 'SvgGLView', cnNotOnD3el: true
+    })) {
+      setupD3El () {
+        return this.glEl.append('svg')
+          .attr('src', this.src)
+          .on('load', () => { this.trigger('viewLoaded'); });
+      }
+      setupTab () {
+        super.setupTab();
+        this.glTabEl
+          .classed('SvgGLTab', true)
+          .append('div')
+          .classed('downloadIcon', true)
+          .attr('title', 'Download')
+          .on('mousedown', () => {
+            d3.event.stopPropagation();
+          })
+          .on('mouseup', () => {
+            this.download();
+          });
+      }
     }
-    setupTab () {
-      super.setupTab();
-      this.glTabEl
-        .classed('SvgTab', true)
-        .append('div')
-        .classed('downloadIcon', true)
-        .attr('title', 'Download')
-        .on('mousedown', () => {
-          d3.event.stopPropagation();
-        })
-        .on('mouseup', () => {
-          this.download();
-        });
-    }
+    return SvgGLView;
   }
-  return SvgGLView;
-}, true);
+});
 
-const { IFrameView, IFrameMixin } = createMixinAndDefault('IFrameMixin', View, superclass => {
-  class IFrameView extends ParentSizeMixin(superclass) {
-    constructor (options) {
-      super(options);
-      this._src = options.src;
-      this.frameLoaded = !this._src; // We are loaded if no src is initially provided
+const { IFrameView, IFrameViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: View,
+  classDefFunc: SuperClass => {
+    class IFrameView extends ParentSizeViewMixin(SuperClass) {
+      constructor (options) {
+        super(options);
+        this._src = options.src;
+        this.frameLoaded = !this._src; // We are loaded if no src is initially provided
+      }
+      setup () {
+        super.setup(...arguments);
+        this.d3el
+          .on('load', () => { this.trigger('viewLoaded'); })
+          .attr('src', this.src);
+      }
+      get src () {
+        return this._src;
+      }
+      set src (src) {
+        this.frameLoaded = !src;
+        this._src = src;
+        this.d3el.select('iframe')
+          .attr('src', this._src);
+        this.render();
+      }
+      get isLoading () {
+        return super.isLoading || !this.frameLoaded;
+      }
+      openAsTab () {
+        window.open(this._src, '_blank');
+      }
     }
-    setup () {
-      super.setup();
-      this.d3el
-        .on('load', () => { this.trigger('viewLoaded'); })
-        .attr('src', this.src);
-    }
-    get src () {
-      return this._src;
-    }
-    set src (src) {
-      this.frameLoaded = !src;
-      this._src = src;
-      this.d3el.select('iframe')
-        .attr('src', this._src);
-      this.render();
-    }
-    get isLoading () {
-      return super.isLoading || !this.frameLoaded;
-    }
-    openAsTab () {
-      window.open(this._src, '_blank');
-    }
+    return IFrameView;
   }
-  return IFrameView;
-}, true);
+});
 
-var defaultStyle$3 = ".lm_header .lm_tab.IFrameTab {\n  padding-right: 36px;\n}\n.lm_header .lm_tab.IFrameTab .linkIcon {\n  position: absolute;\n  width: 11px;\n  height: 11px;\n  background-image: url(\"data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhLS0gQ3JlYXRlZCB3aXRoIElua3NjYXBlIChodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy8pIC0tPgoKPHN2ZwogICB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iCiAgIHhtbG5zOmNjPSJodHRwOi8vY3JlYXRpdmVjb21tb25zLm9yZy9ucyMiCiAgIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyIKICAgeG1sbnM6c3ZnPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIKICAgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIgogICB4bWxuczpzb2RpcG9kaT0iaHR0cDovL3NvZGlwb2RpLnNvdXJjZWZvcmdlLm5ldC9EVEQvc29kaXBvZGktMC5kdGQiCiAgIHhtbG5zOmlua3NjYXBlPSJodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy9uYW1lc3BhY2VzL2lua3NjYXBlIgogICB3aWR0aD0iNTEyIgogICBoZWlnaHQ9IjUxMiIKICAgdmlld0JveD0iMCAwIDUxMiA1MTIiCiAgIHZlcnNpb249IjEuMSIKICAgaWQ9InN2ZzgiCiAgIGlua3NjYXBlOnZlcnNpb249IjAuOTIuNCAoNWRhNjg5YzMxMywgMjAxOS0wMS0xNCkiCiAgIHNvZGlwb2RpOmRvY25hbWU9Imxpbmsuc3ZnIj4KICA8ZGVmcwogICAgIGlkPSJkZWZzMiIgLz4KICA8c29kaXBvZGk6bmFtZWR2aWV3CiAgICAgaWQ9ImJhc2UiCiAgICAgcGFnZWNvbG9yPSIjZmZmZmZmIgogICAgIGJvcmRlcmNvbG9yPSIjNjY2NjY2IgogICAgIGJvcmRlcm9wYWNpdHk9IjEuMCIKICAgICBpbmtzY2FwZTpwYWdlb3BhY2l0eT0iMC4wIgogICAgIGlua3NjYXBlOnBhZ2VzaGFkb3c9IjIiCiAgICAgaW5rc2NhcGU6em9vbT0iMC43IgogICAgIGlua3NjYXBlOmN4PSI5NTEuNjcyNDQiCiAgICAgaW5rc2NhcGU6Y3k9Ijg3OS4zMDQ2OSIKICAgICBpbmtzY2FwZTpkb2N1bWVudC11bml0cz0icHgiCiAgICAgaW5rc2NhcGU6Y3VycmVudC1sYXllcj0ibGF5ZXIxIgogICAgIHNob3dncmlkPSJ0cnVlIgogICAgIHVuaXRzPSJweCIKICAgICBpbmtzY2FwZTp3aW5kb3ctd2lkdGg9IjMzNjAiCiAgICAgaW5rc2NhcGU6d2luZG93LWhlaWdodD0iMTc4MCIKICAgICBpbmtzY2FwZTp3aW5kb3cteD0iNzAzMCIKICAgICBpbmtzY2FwZTp3aW5kb3cteT0iLTEyIgogICAgIGlua3NjYXBlOndpbmRvdy1tYXhpbWl6ZWQ9IjEiCiAgICAgaW5rc2NhcGU6cGFnZWNoZWNrZXJib2FyZD0iZmFsc2UiPgogICAgPGlua3NjYXBlOmdyaWQKICAgICAgIHR5cGU9Inh5Z3JpZCIKICAgICAgIGlkPSJncmlkMTM1OCIKICAgICAgIHNwYWNpbmd4PSIyMCIKICAgICAgIHNwYWNpbmd5PSIyMCIgLz4KICA8L3NvZGlwb2RpOm5hbWVkdmlldz4KICA8bWV0YWRhdGEKICAgICBpZD0ibWV0YWRhdGE1Ij4KICAgIDxyZGY6UkRGPgogICAgICA8Y2M6V29yawogICAgICAgICByZGY6YWJvdXQ9IiI+CiAgICAgICAgPGRjOmZvcm1hdD5pbWFnZS9zdmcreG1sPC9kYzpmb3JtYXQ+CiAgICAgICAgPGRjOnR5cGUKICAgICAgICAgICByZGY6cmVzb3VyY2U9Imh0dHA6Ly9wdXJsLm9yZy9kYy9kY21pdHlwZS9TdGlsbEltYWdlIiAvPgogICAgICAgIDxkYzp0aXRsZT48L2RjOnRpdGxlPgogICAgICA8L2NjOldvcms+CiAgICA8L3JkZjpSREY+CiAgPC9tZXRhZGF0YT4KICA8ZwogICAgIGlua3NjYXBlOmxhYmVsPSJMYXllciAxIgogICAgIGlua3NjYXBlOmdyb3VwbW9kZT0ibGF5ZXIiCiAgICAgaWQ9ImxheWVyMSIKICAgICB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLC01NzkuMjUwMDEpIj4KICAgIDxnCiAgICAgICBpZD0iZzgzNyIKICAgICAgIHRyYW5zZm9ybT0ibWF0cml4KDEuOTI0NDY4OSwwLDAsMS45MjQ0Njg5LC0yMDMzLjI4ODQsLTgxNC45NDQ5MikiCiAgICAgICBzdHlsZT0ic3Ryb2tlLXdpZHRoOjAuNTE5NjIzODgiPgogICAgICA8cGF0aAogICAgICAgICBpZD0icGF0aDgzMSIKICAgICAgICAgZD0ibSAxMjc3LjcyOTgsOTg1LjEwMjIxIGMgNS44NzU0LC0yLjI2NzIxIDEwLjA1OTMsLTYuNDczOTEgMTIuMTA5NiwtMTIuMTc1NTkgMS41NzA2LC00LjM2NzcxIDEuNzAzMiwtOS42MjAwNCAxLjQ0NDksLTU3LjI0Mjc5IC0wLjI3NjgsLTUxLjA1MTY1IC0wLjMzOTEsLTUyLjUyNjA4IC0yLjM2NCwtNTUuOTMzODIgLTEuMTQzOCwtMS45MjUgLTMuOTkxMywtNC45NjI1IC02LjMyNzcsLTYuNzUgLTMuNzQ2MiwtMi44NjYgLTQuOTc3NCwtMy4yNDc0MSAtMTAuNDIwMywtMy4yMjgwNCAtOC4zMDE0LDAuMDI5NSAtMTMuNzQ1NSwyLjU4NTc0IC0xNy4zNjE4LDguMTUyMDYgbCAtMi44MTA1LDQuMzI1OTggLTAuMzA5Miw0Mi4yNSAtMC4zMDkzLDQyLjI1IEggMTE3NS40NDA4IDEwOTkuNSB2IC03Ni41IC03Ni41IGwgMzguNzUsLTAuMDA2IGMgMjMuNTY5NywtMC4wMDMgNDAuMjA2OSwtMC40MTAxOSA0Mi40Njg5LC0xLjAzODQzIDE4LjYxMDEsLTUuMTY4NTIgMTguMDg2OSwtMzIuNzE1MjkgLTAuNzE4OSwtMzcuODUyMjEgLTUuOTM3NSwtMS42MjE4NyAtMTAwLjQxMDQsLTEuNTA5NCAtMTA1Ljg4NCwwLjEyNjA2IC02LjM0MDcsMS44OTQ1NSAtMTIuMTczMyw4LjMyMDQ0IC0xMy41NDM2LDE0LjkyMTM0IC0wLjc5NCwzLjgyNDg1IC0xLjA0MDUsMzMuOTMxMTYgLTAuODQ2NCwxMDMuMzcyNjggbCAwLjI3NCw5Ny45NzY1NiAyLjUsNC40MTE0MiBjIDEuMzc1LDIuNDI2MjggMy42NTEsNS4yNjIwNyA1LjA1NzgsNi4zMDE3NyA2LjQ4OTQsNC43OTU5NSA0LjIxNTEsNC42OTYyMyAxMDguMTcyLDQuNzQyOTIgODguNDM5LDAuMDM5NyA5OC4xMzU3LC0wLjExMjc2IDEwMiwtMS42MDM5MSB6IgogICAgICAgICBzdHlsZT0iZmlsbDojMDAwMDAwO3N0cm9rZS13aWR0aDowLjUxOTYyMzg4IgogICAgICAgICBpbmtzY2FwZTpjb25uZWN0b3ItY3VydmF0dXJlPSIwIiAvPgogICAgICA8cGF0aAogICAgICAgICBpZD0icGF0aDgyNyIKICAgICAgICAgZD0ibSAxMTkxLjc5OTcsODgwLjEyOTgxIGMgMy45NjgyLC0yLjAwODkzIDExLjU1NDIsLTkuMjA4NzIgNTMuMjkyNSwtNTAuNTc5MjMgMTguMjAwNywtMTguMDQwMzEgMzMuMzg4MiwtMzIuODAwNTcgMzMuNzUsLTMyLjgwMDU3IDAuMzYxOCwwIDAuNjY3Nyw2LjQxMjUgMC42Nzk4LDE0LjI1IDAuMDI1LDE2LjE3NzcyIDEuMDI4NiwxOS42NzU5IDcuMzc5LDI1LjcxODYyIDMuMzIyMywzLjE2MTIzIDQuMjcwNCwzLjUwMzk0IDEwLjY5OTEsMy44NjcxOSA1LjI0NDMsMC4yOTYzNCA4LjA0ODYsLTAuMDUgMTAuOTMyMSwtMS4zNTAzMiA0LjY2OTcsLTIuMTA1NzggOC45MzU1LC03LjkyOTc3IDEwLjA1NzksLTEzLjczMjExIDEuMzE2NywtNi44MDY0NSAxLjEwNTcsLTc3LjA5MDI5IC0wLjI0NzYsLTgyLjQ2NDQ5IC0xLjUyMTQsLTYuMDQyMDEgLTguMDYzMSwtMTIuODI4MjcgLTEzLjQ2NjYsLTEzLjk2OTk1IC0yLjEzMTcsLTAuNDUwNDIgLTIyLjEwMDksLTAuODE4OTQgLTQ0LjM3NTksLTAuODE4OTQgSCAxMjIwIGwgLTQuNDU1NiwyLjUgYyAtNS42NDksMy4xNjk2NCAtOS44NTUxLDkuMTQzOCAtMTAuNjYyNSwxNS4xNDQ3NCAtMC44OTMzLDYuNjM5NTIgMi44ODE0LDE0LjY3NjkzIDguNzAzNiwxOC41MzIzOCA0LjE0MjIsMi43NDI5MyA0LjcyODgsMi44MzcwNCAyMC43MTQ5LDMuMzIyODggbCAxNi40NTIsMC41IC00MS43Njc3LDQxIGMgLTQzLjgzMDcsNDMuMDI1IC00NS41MTI3LDQ0Ljk5ODE2IC00NS40NjI3LDUzLjMzMjkxIDAuMDI0LDQuMDU1ODggMi44NzAyLDExLjA5MDI3IDUuNjY5OSwxNC4wMTQ1NiA0Ljg5NDMsNS4xMTIwNyAxNi4wNDU3LDYuODU0NDIgMjIuNjA3OCwzLjUzMjMzIHoiCiAgICAgICAgIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjAuNTE5NjIzODgiCiAgICAgICAgIGlua3NjYXBlOmNvbm5lY3Rvci1jdXJ2YXR1cmU9IjAiIC8+CiAgICA8L2c+CiAgPC9nPgo8L3N2Zz4K\");\n  background-position: center center;\n  background-repeat: no-repeat;\n  background-size: 11px 11px;\n  top: 4px;\n  right: 6px;\n  margin-right: 13px;\n  opacity: 0.4;\n}\n.lm_header .lm_tab.IFrameTab .linkIcon:hover {\n  opacity: 1;\n}\n";
+var defaultStyle$3 = ".IFrameGLTab {\n  padding-right: 36px;\n}\n.IFrameGLTab .linkIcon {\n  position: absolute;\n  width: 11px;\n  height: 11px;\n  background-image: url(\"data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhLS0gQ3JlYXRlZCB3aXRoIElua3NjYXBlIChodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy8pIC0tPgoKPHN2ZwogICB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iCiAgIHhtbG5zOmNjPSJodHRwOi8vY3JlYXRpdmVjb21tb25zLm9yZy9ucyMiCiAgIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyIKICAgeG1sbnM6c3ZnPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIKICAgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIgogICB4bWxuczpzb2RpcG9kaT0iaHR0cDovL3NvZGlwb2RpLnNvdXJjZWZvcmdlLm5ldC9EVEQvc29kaXBvZGktMC5kdGQiCiAgIHhtbG5zOmlua3NjYXBlPSJodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy9uYW1lc3BhY2VzL2lua3NjYXBlIgogICB3aWR0aD0iNTEyIgogICBoZWlnaHQ9IjUxMiIKICAgdmlld0JveD0iMCAwIDUxMiA1MTIiCiAgIHZlcnNpb249IjEuMSIKICAgaWQ9InN2ZzgiCiAgIGlua3NjYXBlOnZlcnNpb249IjAuOTIuNCAoNWRhNjg5YzMxMywgMjAxOS0wMS0xNCkiCiAgIHNvZGlwb2RpOmRvY25hbWU9Imxpbmsuc3ZnIj4KICA8ZGVmcwogICAgIGlkPSJkZWZzMiIgLz4KICA8c29kaXBvZGk6bmFtZWR2aWV3CiAgICAgaWQ9ImJhc2UiCiAgICAgcGFnZWNvbG9yPSIjZmZmZmZmIgogICAgIGJvcmRlcmNvbG9yPSIjNjY2NjY2IgogICAgIGJvcmRlcm9wYWNpdHk9IjEuMCIKICAgICBpbmtzY2FwZTpwYWdlb3BhY2l0eT0iMC4wIgogICAgIGlua3NjYXBlOnBhZ2VzaGFkb3c9IjIiCiAgICAgaW5rc2NhcGU6em9vbT0iMC43IgogICAgIGlua3NjYXBlOmN4PSI5NTEuNjcyNDQiCiAgICAgaW5rc2NhcGU6Y3k9Ijg3OS4zMDQ2OSIKICAgICBpbmtzY2FwZTpkb2N1bWVudC11bml0cz0icHgiCiAgICAgaW5rc2NhcGU6Y3VycmVudC1sYXllcj0ibGF5ZXIxIgogICAgIHNob3dncmlkPSJ0cnVlIgogICAgIHVuaXRzPSJweCIKICAgICBpbmtzY2FwZTp3aW5kb3ctd2lkdGg9IjMzNjAiCiAgICAgaW5rc2NhcGU6d2luZG93LWhlaWdodD0iMTc4MCIKICAgICBpbmtzY2FwZTp3aW5kb3cteD0iNzAzMCIKICAgICBpbmtzY2FwZTp3aW5kb3cteT0iLTEyIgogICAgIGlua3NjYXBlOndpbmRvdy1tYXhpbWl6ZWQ9IjEiCiAgICAgaW5rc2NhcGU6cGFnZWNoZWNrZXJib2FyZD0iZmFsc2UiPgogICAgPGlua3NjYXBlOmdyaWQKICAgICAgIHR5cGU9Inh5Z3JpZCIKICAgICAgIGlkPSJncmlkMTM1OCIKICAgICAgIHNwYWNpbmd4PSIyMCIKICAgICAgIHNwYWNpbmd5PSIyMCIgLz4KICA8L3NvZGlwb2RpOm5hbWVkdmlldz4KICA8bWV0YWRhdGEKICAgICBpZD0ibWV0YWRhdGE1Ij4KICAgIDxyZGY6UkRGPgogICAgICA8Y2M6V29yawogICAgICAgICByZGY6YWJvdXQ9IiI+CiAgICAgICAgPGRjOmZvcm1hdD5pbWFnZS9zdmcreG1sPC9kYzpmb3JtYXQ+CiAgICAgICAgPGRjOnR5cGUKICAgICAgICAgICByZGY6cmVzb3VyY2U9Imh0dHA6Ly9wdXJsLm9yZy9kYy9kY21pdHlwZS9TdGlsbEltYWdlIiAvPgogICAgICAgIDxkYzp0aXRsZT48L2RjOnRpdGxlPgogICAgICA8L2NjOldvcms+CiAgICA8L3JkZjpSREY+CiAgPC9tZXRhZGF0YT4KICA8ZwogICAgIGlua3NjYXBlOmxhYmVsPSJMYXllciAxIgogICAgIGlua3NjYXBlOmdyb3VwbW9kZT0ibGF5ZXIiCiAgICAgaWQ9ImxheWVyMSIKICAgICB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLC01NzkuMjUwMDEpIj4KICAgIDxnCiAgICAgICBpZD0iZzgzNyIKICAgICAgIHRyYW5zZm9ybT0ibWF0cml4KDEuOTI0NDY4OSwwLDAsMS45MjQ0Njg5LC0yMDMzLjI4ODQsLTgxNC45NDQ5MikiCiAgICAgICBzdHlsZT0ic3Ryb2tlLXdpZHRoOjAuNTE5NjIzODgiPgogICAgICA8cGF0aAogICAgICAgICBpZD0icGF0aDgzMSIKICAgICAgICAgZD0ibSAxMjc3LjcyOTgsOTg1LjEwMjIxIGMgNS44NzU0LC0yLjI2NzIxIDEwLjA1OTMsLTYuNDczOTEgMTIuMTA5NiwtMTIuMTc1NTkgMS41NzA2LC00LjM2NzcxIDEuNzAzMiwtOS42MjAwNCAxLjQ0NDksLTU3LjI0Mjc5IC0wLjI3NjgsLTUxLjA1MTY1IC0wLjMzOTEsLTUyLjUyNjA4IC0yLjM2NCwtNTUuOTMzODIgLTEuMTQzOCwtMS45MjUgLTMuOTkxMywtNC45NjI1IC02LjMyNzcsLTYuNzUgLTMuNzQ2MiwtMi44NjYgLTQuOTc3NCwtMy4yNDc0MSAtMTAuNDIwMywtMy4yMjgwNCAtOC4zMDE0LDAuMDI5NSAtMTMuNzQ1NSwyLjU4NTc0IC0xNy4zNjE4LDguMTUyMDYgbCAtMi44MTA1LDQuMzI1OTggLTAuMzA5Miw0Mi4yNSAtMC4zMDkzLDQyLjI1IEggMTE3NS40NDA4IDEwOTkuNSB2IC03Ni41IC03Ni41IGwgMzguNzUsLTAuMDA2IGMgMjMuNTY5NywtMC4wMDMgNDAuMjA2OSwtMC40MTAxOSA0Mi40Njg5LC0xLjAzODQzIDE4LjYxMDEsLTUuMTY4NTIgMTguMDg2OSwtMzIuNzE1MjkgLTAuNzE4OSwtMzcuODUyMjEgLTUuOTM3NSwtMS42MjE4NyAtMTAwLjQxMDQsLTEuNTA5NCAtMTA1Ljg4NCwwLjEyNjA2IC02LjM0MDcsMS44OTQ1NSAtMTIuMTczMyw4LjMyMDQ0IC0xMy41NDM2LDE0LjkyMTM0IC0wLjc5NCwzLjgyNDg1IC0xLjA0MDUsMzMuOTMxMTYgLTAuODQ2NCwxMDMuMzcyNjggbCAwLjI3NCw5Ny45NzY1NiAyLjUsNC40MTE0MiBjIDEuMzc1LDIuNDI2MjggMy42NTEsNS4yNjIwNyA1LjA1NzgsNi4zMDE3NyA2LjQ4OTQsNC43OTU5NSA0LjIxNTEsNC42OTYyMyAxMDguMTcyLDQuNzQyOTIgODguNDM5LDAuMDM5NyA5OC4xMzU3LC0wLjExMjc2IDEwMiwtMS42MDM5MSB6IgogICAgICAgICBzdHlsZT0iZmlsbDojMDAwMDAwO3N0cm9rZS13aWR0aDowLjUxOTYyMzg4IgogICAgICAgICBpbmtzY2FwZTpjb25uZWN0b3ItY3VydmF0dXJlPSIwIiAvPgogICAgICA8cGF0aAogICAgICAgICBpZD0icGF0aDgyNyIKICAgICAgICAgZD0ibSAxMTkxLjc5OTcsODgwLjEyOTgxIGMgMy45NjgyLC0yLjAwODkzIDExLjU1NDIsLTkuMjA4NzIgNTMuMjkyNSwtNTAuNTc5MjMgMTguMjAwNywtMTguMDQwMzEgMzMuMzg4MiwtMzIuODAwNTcgMzMuNzUsLTMyLjgwMDU3IDAuMzYxOCwwIDAuNjY3Nyw2LjQxMjUgMC42Nzk4LDE0LjI1IDAuMDI1LDE2LjE3NzcyIDEuMDI4NiwxOS42NzU5IDcuMzc5LDI1LjcxODYyIDMuMzIyMywzLjE2MTIzIDQuMjcwNCwzLjUwMzk0IDEwLjY5OTEsMy44NjcxOSA1LjI0NDMsMC4yOTYzNCA4LjA0ODYsLTAuMDUgMTAuOTMyMSwtMS4zNTAzMiA0LjY2OTcsLTIuMTA1NzggOC45MzU1LC03LjkyOTc3IDEwLjA1NzksLTEzLjczMjExIDEuMzE2NywtNi44MDY0NSAxLjEwNTcsLTc3LjA5MDI5IC0wLjI0NzYsLTgyLjQ2NDQ5IC0xLjUyMTQsLTYuMDQyMDEgLTguMDYzMSwtMTIuODI4MjcgLTEzLjQ2NjYsLTEzLjk2OTk1IC0yLjEzMTcsLTAuNDUwNDIgLTIyLjEwMDksLTAuODE4OTQgLTQ0LjM3NTksLTAuODE4OTQgSCAxMjIwIGwgLTQuNDU1NiwyLjUgYyAtNS42NDksMy4xNjk2NCAtOS44NTUxLDkuMTQzOCAtMTAuNjYyNSwxNS4xNDQ3NCAtMC44OTMzLDYuNjM5NTIgMi44ODE0LDE0LjY3NjkzIDguNzAzNiwxOC41MzIzOCA0LjE0MjIsMi43NDI5MyA0LjcyODgsMi44MzcwNCAyMC43MTQ5LDMuMzIyODggbCAxNi40NTIsMC41IC00MS43Njc3LDQxIGMgLTQzLjgzMDcsNDMuMDI1IC00NS41MTI3LDQ0Ljk5ODE2IC00NS40NjI3LDUzLjMzMjkxIDAuMDI0LDQuMDU1ODggMi44NzAyLDExLjA5MDI3IDUuNjY5OSwxNC4wMTQ1NiA0Ljg5NDMsNS4xMTIwNyAxNi4wNDU3LDYuODU0NDIgMjIuNjA3OCwzLjUzMjMzIHoiCiAgICAgICAgIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjAuNTE5NjIzODgiCiAgICAgICAgIGlua3NjYXBlOmNvbm5lY3Rvci1jdXJ2YXR1cmU9IjAiIC8+CiAgICA8L2c+CiAgPC9nPgo8L3N2Zz4K\");\n  background-position: center center;\n  background-repeat: no-repeat;\n  background-size: 11px 11px;\n  top: 4px;\n  right: 6px;\n  margin-right: 13px;\n  opacity: 0.4;\n}\n.IFrameGLTab .linkIcon:hover {\n  opacity: 1;\n}\n";
 
 /* globals d3 */
 
-const { IFrameGLView, IFrameGLMixin } = createMixinAndDefault('IFrameGLMixin', GLView, superclass => {
-  class IFrameGLView extends IFrameMixin(RestylableMixin(superclass, defaultStyle$3, 'IFrameGLView')) {
-    setupD3El () {
-      return this.glEl.append('iframe');
+const { IFrameGLView, IFrameGLViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: GLView,
+  classDefFunc: SuperClass => {
+    class IFrameGLView extends IFrameViewMixin(ThemeableMixin({
+      SuperClass, defaultStyle: defaultStyle$3, className: 'IFrameGLView', cnNotOnD3el: true
+    })) {
+      setupD3El () {
+        return this.glEl.append('iframe');
+      }
+      setupTab () {
+        super.setupTab();
+        this.glTabEl
+          .classed('IFrameGLTab', true)
+          .append('div')
+          .classed('linkIcon', true)
+          .attr('title', 'Open in new tab')
+          .on('mousedown', () => {
+            d3.event.stopPropagation();
+          })
+          .on('mouseup', () => {
+            this.openAsTab();
+          });
+      }
     }
-    setupTab () {
-      super.setupTab();
-      this.glTabEl
-        .classed('IFrameTab', true)
-        .append('div')
-        .classed('linkIcon', true)
-        .attr('title', 'Open in new tab')
-        .on('mousedown', () => {
-          d3.event.stopPropagation();
-        })
-        .on('mouseup', () => {
-          this.openAsTab();
-        });
-    }
+    return IFrameGLView;
   }
-  return IFrameGLView;
-}, true);
-
-
+});
 
 var goldenlayout = /*#__PURE__*/Object.freeze({
   __proto__: null,
   GLRootView: GLRootView,
-  GLRootMixin: GLRootMixin,
+  GLRootViewMixin: GLRootViewMixin,
   GLView: GLView,
-  GLMixin: GLMixin,
+  GLViewMixin: GLViewMixin,
   SvgGLView: SvgGLView,
-  SvgGLMixin: SvgGLMixin,
+  SvgGLViewMixin: SvgGLViewMixin,
   IFrameGLView: IFrameGLView,
-  IFrameGLMixin: IFrameGLMixin
+  IFrameGLViewMixin: IFrameGLViewMixin
 });
 
 /* globals gapi */
@@ -1099,8 +1185,6 @@ AuthSheetModel.MODE = {
   'AUTH_READ_WRITE': 'AUTH_READ_WRITE'
 };
 
-
-
 var google = /*#__PURE__*/Object.freeze({
   __proto__: null,
   AuthSheetModel: AuthSheetModel
@@ -1110,84 +1194,94 @@ var defaultStyle$4 = ".LoadingSpinner {\n  position: absolute;\n  background: ce
 
 /* globals d3 */
 
-const { LoadingView, LoadingMixin } = createMixinAndDefault('LoadingMixin', View, superclass => {
-  class LoadingView extends RestylableMixin(superclass, defaultStyle$4, 'LoadingSpinner', true) {
-    constructor (options) {
-      super(options);
-      this._loaded = false;
-      this.on('load', () => {
-        this._loaded = true;
-        this.render();
-      });
+const { LoadingView, LoadingViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: View,
+  classDefFunc: SuperClass => {
+    class LoadingView extends ThemeableMixin({
+      SuperClass, defaultStyle: defaultStyle$4, className: 'LoadingSpinner', cnNotOnD3el: true
+    }) {
+      constructor (options) {
+        super(options);
+        this._loaded = false;
+        this.on('load', () => {
+          this._loaded = true;
+          this.render();
+        });
+      }
+      get isLoading () {
+        return !this._loaded;
+      }
+      setup () {
+        super.setup(...arguments);
+        // Place a layer on top of this.d3el
+        const parent = d3.select(this.d3el.node().parentNode);
+        this.spinner = parent.append('div')
+          .classed('LoadingSpinner', true)
+          .style('display', 'none');
+      }
+      draw () {
+        super.draw(...arguments);
+        // Match the position / size of this.d3el
+        const bounds = this.getBounds();
+        const parentBounds = this.getBounds(d3.select(this.d3el.node().parentNode));
+        this.spinner
+          .style('top', bounds.top - parentBounds.top)
+          .style('left', bounds.left - parentBounds.left)
+          .style('right', bounds.right - parentBounds.right)
+          .style('bottom', bounds.bottom - parentBounds.bottom)
+          .style('display', this.isLoading ? null : 'none');
+      }
     }
-    get isLoading () {
-      return !this._loaded;
-    }
-    setup () {
-      super.setup();
-      // Place a layer on top of this.d3el
-      const parent = d3.select(this.d3el.node().parentNode);
-      this.spinner = parent.append('div')
-        .classed('LoadingSpinner', true)
-        .style('display', 'none');
-    }
-    draw () {
-      super.draw();
-      // Match the position / size of this.d3el
-      const bounds = this.getBounds();
-      const parentBounds = this.getBounds(d3.select(this.d3el.node().parentNode));
-      this.spinner
-        .style('top', bounds.top - parentBounds.top)
-        .style('left', bounds.left - parentBounds.left)
-        .style('right', bounds.right - parentBounds.right)
-        .style('bottom', bounds.bottom - parentBounds.bottom)
-        .style('display', this.isLoading ? null : 'none');
-    }
+    return LoadingView;
   }
-  return LoadingView;
-}, true);
+});
 
 var defaultStyle$5 = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nhttp://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8\nhttp://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8\n*/\n/*\nColor meanings:\n*/\n/*\nDummy class that exposes colors for assignment to classes in Javascript:\n*/\n.classColorList {\n  filter: url(#recolorImageTo1B9E77);\n  filter: url(#recolorImageToD95F02);\n  filter: url(#recolorImageTo7570B3);\n  filter: url(#recolorImageToE7298A);\n  filter: url(#recolorImageTo66A61E);\n  filter: url(#recolorImageToE6AB02);\n  filter: url(#recolorImageToA6761D);\n  filter: url(#recolorImageToB3E2CD);\n  filter: url(#recolorImageToFDCDAC);\n  filter: url(#recolorImageToCBD5E8);\n  filter: url(#recolorImageToF4CAE4);\n  filter: url(#recolorImageToE6F5C9);\n  filter: url(#recolorImageToFFF2AE);\n  filter: url(#recolorImageToF1E2CC);\n}\n/*\nGradients:\n*/\n.EmptyStateLayer {\n  position: absolute;\n  width: 100%;\n  height: 100%;\n  pointer-events: none;\n}\n.EmptyStateLayer .EmptyStateLayerContent {\n  position: absolute;\n  top: 50%;\n  transform: translateY(-50%);\n  left: 0.25em;\n  right: 0.25em;\n  text-align: center;\n}\n";
 
 /* globals d3 */
 
-const { EmptyStateView, EmptyStateMixin } = createMixinAndDefault('EmptyStateMixin', View, superclass => {
-  class EmptyStateView extends RestylableMixin(superclass, defaultStyle$5, 'EmptyStateLayer', true) {
-    get emptyMessage () {
-      // Should be overridden by subclasses; return an html string (or falsey to
-      // hide the empty state layer)
-      return '';
+const { EmptyStateView, EmptyStateViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: View,
+  classDefFunc: SuperClass => {
+    class EmptyStateView extends ThemeableMixin({
+      SuperClass, defaultStyle: defaultStyle$5, className: 'EmptyStateLayer', cnNotOnD3el: true
+    }) {
+      get emptyMessage () {
+        // Should be overridden by subclasses; return an html string (or falsey to
+        // hide the empty state layer)
+        return '';
+      }
+      setup () {
+        super.setup(...arguments);
+        // Insert a layer underneath this.d3el
+        const node = this.d3el.node();
+        const parentNode = node.parentNode;
+        const wrapperNode = document.createElement('div');
+        parentNode.insertBefore(wrapperNode, node);
+        this.emptyStateWrapper = d3.select(wrapperNode)
+          .classed('EmptyStateLayer', true)
+          .style('display', 'none');
+        this.emptyStateContent = this.emptyStateWrapper.append('div')
+          .classed('EmptyStateLayerContent', true);
+      }
+      draw () {
+        super.draw(...arguments);
+        const message = this.emptyMessage;
+        // Match the position / size of this.d3el
+        const bounds = this.getBounds();
+        const parentBounds = this.getBounds(d3.select(this.d3el.node().parentNode));
+        this.emptyStateContent.html(message);
+        this.emptyStateWrapper
+          .style('top', bounds.top - parentBounds.top)
+          .style('left', bounds.left - parentBounds.left)
+          .style('right', bounds.right - parentBounds.right)
+          .style('bottom', bounds.bottom - parentBounds.bottom)
+          .style('display', message ? null : 'none');
+      }
     }
-    setup () {
-      super.setup();
-      // Insert a layer underneath this.d3el
-      const node = this.d3el.node();
-      const parentNode = node.parentNode;
-      const wrapperNode = document.createElement('div');
-      parentNode.insertBefore(wrapperNode, node);
-      this.emptyStateWrapper = d3.select(wrapperNode)
-        .classed('EmptyStateLayer', true)
-        .style('display', 'none');
-      this.emptyStateContent = this.emptyStateWrapper.append('div')
-        .classed('EmptyStateLayerContent', true);
-    }
-    draw () {
-      super.draw();
-      const message = this.emptyMessage;
-      // Match the position / size of this.d3el
-      const bounds = this.getBounds();
-      const parentBounds = this.getBounds(d3.select(this.d3el.node().parentNode));
-      this.emptyStateContent.html(message);
-      this.emptyStateWrapper
-        .style('top', bounds.top - parentBounds.top)
-        .style('left', bounds.left - parentBounds.left)
-        .style('right', bounds.right - parentBounds.right)
-        .style('bottom', bounds.bottom - parentBounds.bottom)
-        .style('display', message ? null : 'none');
-    }
+    return EmptyStateView;
   }
-  return EmptyStateView;
-}, true);
+});
 
 var defaultStyle$6 = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nhttp://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8\nhttp://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8\n*/\n/*\nColor meanings:\n*/\n/*\nDummy class that exposes colors for assignment to classes in Javascript:\n*/\n.classColorList {\n  filter: url(#recolorImageTo1B9E77);\n  filter: url(#recolorImageToD95F02);\n  filter: url(#recolorImageTo7570B3);\n  filter: url(#recolorImageToE7298A);\n  filter: url(#recolorImageTo66A61E);\n  filter: url(#recolorImageToE6AB02);\n  filter: url(#recolorImageToA6761D);\n  filter: url(#recolorImageToB3E2CD);\n  filter: url(#recolorImageToFDCDAC);\n  filter: url(#recolorImageToCBD5E8);\n  filter: url(#recolorImageToF4CAE4);\n  filter: url(#recolorImageToE6F5C9);\n  filter: url(#recolorImageToFFF2AE);\n  filter: url(#recolorImageToF1E2CC);\n}\n/*\nGradients:\n*/\n.UkiButton {\n  position: relative;\n  min-width: 2.5em;\n  min-height: 2.5em;\n  width: -webkit-fit-content;\n  height: -webkit-fit-content;\n  width: fit-content;\n  height: fit-content;\n  background: white;\n  border-radius: 0.5em;\n  display: flex;\n  align-items: center;\n  flex-wrap: nowrap;\n  justify-content: space-around;\n  cursor: pointer;\n  user-select: none;\n}\n.UkiButton.small {\n  min-width: 1.5em;\n  min-height: 1.5em;\n}\n.UkiButton.tiny {\n  min-width: 1em;\n  min-height: 1em;\n}\n.UkiButton a {\n  position: absolute;\n  left: 0px;\n  top: 0px;\n  right: 0px;\n  bottom: 0px;\n  border: 1px solid #252525;\n  border-radius: 0.5em;\n  overflow: hidden;\n  background: linear-gradient(to bottom, rgba(82, 82, 82, 0.1) 0%, rgba(37, 37, 37, 0) 40%, rgba(0, 0, 0, 0.1) 100%);\n}\n.UkiButton img {\n  position: relative;\n  width: 1.5em;\n  height: 1.5em;\n  filter: url(#recolorImageTo252525);\n  margin: 0px 0.5em;\n}\n.UkiButton.small img {\n  width: 0.75em;\n  height: 0.75em;\n  margin: 0px 0.5em;\n}\n.UkiButton.tiny img {\n  width: 0.5em;\n  height: 0.5em;\n  margin: 0px 0.25em;\n}\n.UkiButton .label {\n  position: relative;\n  white-space: nowrap;\n  color: #252525;\n  margin-right: 0.5em;\n}\n.UkiButton .label.labelOnly {\n  margin-left: 0.5em;\n}\n.UkiButton.small .label {\n  font-size: 0.7em;\n  margin-right: 0.5em;\n}\n.UkiButton.small .label.labelOnly {\n  margin-left: 0.5em;\n}\n.UkiButton.tiny .label {\n  font-size: 0.5em;\n  margin-right: 0.25em;\n}\n.UkiButton.tiny .label.labelOnly {\n  margin-left: 0.25em;\n}\n.UkiButton .badge {\n  position: absolute;\n  font-size: 0.7em;\n  font-weight: 600;\n  font-family: 'Source Sans Pro', Arial, sans-serif;\n  right: -0.5em;\n  top: -0.5em;\n  text-align: center;\n  min-width: 0.65em;\n  padding: 0em 0.25em 0em 0.25em;\n  background-color: #252525;\n  color: #BDBDBD;\n  border-radius: 0.5em;\n  border: 1px solid #252525;\n}\n.UkiButton:hover a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, rgba(82, 82, 82, 0.25) 0%, rgba(37, 37, 37, 0.25) 40%, rgba(0, 0, 0, 0.5) 100%);\n}\n.UkiButton:active a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(37, 37, 37, 0.25) 40%, rgba(82, 82, 82, 0.5) 100%);\n}\n.UkiButton.selected a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, #525252 0%, #252525 40%, #000000 100%);\n}\n.UkiButton.selected img {\n  filter: url(#recolorImageToF7F7F7);\n}\n.UkiButton.selected .label {\n  color: #F7F7F7;\n}\n.UkiButton.selected:hover a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, #525252 0%, #252525 40%, black 100%);\n}\n.UkiButton.selected:active a {\n  border-color: #252525;\n  background: linear-gradient(to bottom, black 0%, #252525 40%, #525252 100%);\n}\n.UkiButton.disabled,\n.UkiButton.disabled:hover,\n.UkiButton.disabled:active {\n  cursor: default;\n}\n.UkiButton.disabled a,\n.UkiButton.disabled:hover a,\n.UkiButton.disabled:active a {\n  border-color: #D9D9D9;\n  background: #BDBDBD;\n}\n.UkiButton.disabled img,\n.UkiButton.disabled:hover img,\n.UkiButton.disabled:active img {\n  filter: url(#recolorImageToD9D9D9);\n}\n.UkiButton.disabled .label,\n.UkiButton.disabled:hover .label,\n.UkiButton.disabled:active .label {\n  color: #D9D9D9;\n}\n.UkiButton.disabled .badge,\n.UkiButton.disabled:hover .badge,\n.UkiButton.disabled:active .badge {\n  color: #D9D9D9;\n  border-color: #D9D9D9;\n  background-color: #BDBDBD;\n}\n";
 
@@ -1266,431 +1360,493 @@ var recolorImageFilter = () => {
   }, 100);
 };
 
-const { UkiButton, UkiButtonMixin } = createMixinAndDefault('UkiButtonMixin', View, superclass => {
-  class UkiButton extends RestylableMixin(superclass, defaultStyle$6, 'UkiButton') {
-    constructor (options) {
-      super(options);
+const { UkiButton, UkiButtonMixin } = createMixinAndDefault({
+  DefaultSuperClass: View,
+  classDefFunc: SuperClass => {
+    class UkiButton extends ThemeableMixin({
+      SuperClass, defaultStyle: defaultStyle$6, className: 'UkiButton'
+    }) {
+      constructor (options) {
+        super(options);
 
-      this._size = options.size;
-      this._label = options.label;
-      this._img = options.img;
-      this._disabled = options.disabled || false;
-      this._selected = options.selected || false;
-      this._badge = options.badge;
-    }
-    set size (value) {
-      this._size = value;
-      this.render();
-    }
-    get size () {
-      return this._size;
-    }
-    set label (value) {
-      this._label = value;
-      this.render();
-    }
-    get label () {
-      return this._label;
-    }
-    set img (value) {
-      this._img = value;
-      this.render();
-    }
-    get img () {
-      return this._img;
-    }
-    set disabled (value) {
-      this._disabled = value;
-      this.render();
-    }
-    get disabled () {
-      return this._disabled;
-    }
-    set selected (value) {
-      this._selected = value;
-      this.render();
-    }
-    get selected () {
-      return this._selected;
-    }
-    set badge (value) {
-      this._badge = value;
-      this.render();
-    }
-    get badge () {
-      return this._badge;
-    }
-    setup () {
-      super.setup();
-      recolorImageFilter();
-      this.d3el.append('a');
-      this.d3el.append('img')
-        .style('display', 'none');
-      this.d3el.append('div')
-        .classed('label', true)
-        .style('display', 'none');
-      this.d3el.append('div')
-        .classed('badge', true)
-        .style('display', 'none');
+        this._size = options.size;
+        this._label = options.label;
+        this._img = options.img;
+        this._disabled = options.disabled || false;
+        this._selected = options.selected || false;
+        this._badge = options.badge;
+      }
+      set size (value) {
+        this._size = value;
+        this.render();
+      }
+      get size () {
+        return this._size;
+      }
+      set label (value) {
+        this._label = value;
+        this.render();
+      }
+      get label () {
+        return this._label;
+      }
+      set img (value) {
+        this._img = value;
+        this.render();
+      }
+      get img () {
+        return this._img;
+      }
+      set disabled (value) {
+        this._disabled = value;
+        this.render();
+      }
+      get disabled () {
+        return this._disabled;
+      }
+      set selected (value) {
+        this._selected = value;
+        this.render();
+      }
+      get selected () {
+        return this._selected;
+      }
+      set badge (value) {
+        this._badge = value;
+        this.render();
+      }
+      get badge () {
+        return this._badge;
+      }
+      setup () {
+        super.setup(...arguments);
+        recolorImageFilter();
+        this.d3el.append('a');
+        this.d3el.append('img')
+          .style('display', 'none');
+        this.d3el.append('div')
+          .classed('label', true)
+          .style('display', 'none');
+        this.d3el.append('div')
+          .classed('badge', true)
+          .style('display', 'none');
 
-      this.d3el.on('click', () => {
-        if (!this.disabled) {
-          this.trigger('click');
-        }
-      });
+        this.d3el.on('click', () => {
+          if (!this.disabled) {
+            this.trigger('click');
+          }
+        });
+      }
+      draw () {
+        super.draw(...arguments);
+
+        this.d3el
+          .classed('small', this.size === 'small')
+          .classed('tiny', this.size === 'tiny')
+          .classed('selected', this.selected)
+          .classed('disabled', this.disabled);
+
+        this.d3el.select('img')
+          .style('display', this.img ? null : 'none')
+          .attr('src', this.img);
+
+        this.d3el.select('.label')
+          .classed('labelOnly', !this.img)
+          .style('display', this.label === undefined ? 'none' : null)
+          .text(this.label);
+
+        this.d3el.select('.badge')
+          .style('display', this.badge === undefined ? 'none' : null)
+          .text(this.badge);
+      }
     }
-    draw () {
-      super.draw();
-
-      this.d3el
-        .classed('small', this.size === 'small')
-        .classed('tiny', this.size === 'tiny')
-        .classed('selected', this.selected)
-        .classed('disabled', this.disabled);
-
-      this.d3el.select('img')
-        .style('display', this.img ? null : 'none')
-        .attr('src', this.img);
-
-      this.d3el.select('.label')
-        .classed('labelOnly', !this.img)
-        .style('display', this.label === undefined ? 'none' : null)
-        .text(this.label);
-
-      this.d3el.select('.badge')
-        .style('display', this.badge === undefined ? 'none' : null)
-        .text(this.badge);
-    }
+    return UkiButton;
   }
-  return UkiButton;
 });
 
 var defaultStyle$7 = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nhttp://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8\nhttp://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8\n*/\n/*\nColor meanings:\n*/\n/*\nDummy class that exposes colors for assignment to classes in Javascript:\n*/\n.classColorList {\n  filter: url(#recolorImageTo1B9E77);\n  filter: url(#recolorImageToD95F02);\n  filter: url(#recolorImageTo7570B3);\n  filter: url(#recolorImageToE7298A);\n  filter: url(#recolorImageTo66A61E);\n  filter: url(#recolorImageToE6AB02);\n  filter: url(#recolorImageToA6761D);\n  filter: url(#recolorImageToB3E2CD);\n  filter: url(#recolorImageToFDCDAC);\n  filter: url(#recolorImageToCBD5E8);\n  filter: url(#recolorImageToF4CAE4);\n  filter: url(#recolorImageToE6F5C9);\n  filter: url(#recolorImageToFFF2AE);\n  filter: url(#recolorImageToF1E2CC);\n}\n/*\nGradients:\n*/\n.ModalView {\n  position: absolute;\n  left: 0px;\n  top: 0px;\n  right: 0px;\n  bottom: 0px;\n  display: flex;\n  background-color: rgba(37, 37, 37, 0.75);\n  z-index: 1000;\n}\n.ModalView .centerWrapper {\n  position: relative;\n  background-color: #F7F7F7;\n  border: 1px solid #252525;\n  box-shadow: 0.5em 0.5em 2em #252525;\n  min-width: 20em;\n  max-width: calc(100% - 4em);\n  min-height: 20em;\n  max-height: calc(100% - 4em);\n  margin: auto;\n  padding: 1em;\n}\n.ModalView .centerWrapper .contents {\n  margin-bottom: 3.5em;\n  max-height: calc(100vh - 7.5em);\n}\n.ModalView .buttonWrapper {\n  position: absolute;\n  bottom: 1em;\n  right: 1em;\n  display: flex;\n  justify-content: flex-end;\n  align-items: center;\n}\n.ModalView .buttonWrapper .UkiButton {\n  margin-left: 1em;\n}\n";
 
 var template = "<div class=\"centerWrapper\">\n  <div class=\"contents\"></div>\n  <div class=\"buttonWrapper\"></div>\n</div>\n";
 
-const { ModalView, ModalMixin } = createMixinAndDefault('ModalMixin', View, superclass => {
-  class ModalView extends RestylableMixin(superclass, defaultStyle$7, 'ModalView') {
-    get defaultButtons () {
-      return [
-        {
-          label: 'Cancel',
-          className: 'cancel',
-          onclick: () => { this.hide(); }
-        },
-        {
-          label: 'OK',
-          className: 'ok',
-          selected: true,
-          onclick: () => { this.hide(); }
+const { ModalView, ModalViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: View,
+  classDefFunc: SuperClass => {
+    class ModalView extends ThemeableMixin({
+      SuperClass, defaultStyle: defaultStyle$7, className: 'ModalView'
+    }) {
+      get defaultButtons () {
+        return [
+          {
+            label: 'Cancel',
+            className: 'cancel',
+            onclick: () => { this.hide(); }
+          },
+          {
+            label: 'OK',
+            className: 'ok',
+            selected: true,
+            onclick: () => { this.hide(); }
+          }
+        ];
+      }
+      show (options = {}) {
+        this.contents.html(options.content || '');
+        this.setupButtons(options.buttons || this.defaultButtons);
+        this.d3el.style('display', options.hide ? 'none' : null);
+      }
+      hide () {
+        this.show({ hide: true });
+      }
+      setup () {
+        super.setup(...arguments);
+        this.d3el
+          .style('display', 'none')
+          .html(template);
+
+        this.contents = this.d3el.select('.contents')
+          .classed(this.type, true);
+        this.buttonWrapper = this.d3el.select('.buttonWrapper');
+
+        this.setupButtons();
+      }
+      setupButtons (buttonSpecs = this.defaultButtons) {
+        this.buttonWrapper.html('');
+        for (const spec of buttonSpecs) {
+          spec.d3el = this.buttonWrapper.append('div');
+          const button = new UkiButton(spec);
+          button.on('click', () => { spec.onclick.call(this); });
         }
-      ];
-    }
-    show (options = {}) {
-      this.contents.html(options.content || '');
-      this.setupButtons(options.buttons || this.defaultButtons);
-      this.d3el.style('display', options.hide ? 'none' : null);
-    }
-    hide () {
-      this.show({ hide: true });
-    }
-    setup () {
-      super.setup();
-      this.d3el
-        .style('display', 'none')
-        .html(template);
-
-      this.contents = this.d3el.select('.contents')
-        .classed(this.type, true);
-      this.buttonWrapper = this.d3el.select('.buttonWrapper');
-
-      this.setupButtons();
-    }
-    setupButtons (buttonSpecs = this.defaultButtons) {
-      this.buttonWrapper.html('');
-      for (const spec of buttonSpecs) {
-        spec.d3el = this.buttonWrapper.append('div');
-        const button = new UkiButton(spec);
-        button.on('click', () => { spec.onclick.call(this); });
       }
     }
+    return ModalView;
   }
-  return ModalView;
-}, true);
+});
 
 var defaultStyle$8 = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nhttp://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8\nhttp://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8\n*/\n/*\nColor meanings:\n*/\n/*\nDummy class that exposes colors for assignment to classes in Javascript:\n*/\n.classColorList {\n  filter: url(#recolorImageTo1B9E77);\n  filter: url(#recolorImageToD95F02);\n  filter: url(#recolorImageTo7570B3);\n  filter: url(#recolorImageToE7298A);\n  filter: url(#recolorImageTo66A61E);\n  filter: url(#recolorImageToE6AB02);\n  filter: url(#recolorImageToA6761D);\n  filter: url(#recolorImageToB3E2CD);\n  filter: url(#recolorImageToFDCDAC);\n  filter: url(#recolorImageToCBD5E8);\n  filter: url(#recolorImageToF4CAE4);\n  filter: url(#recolorImageToE6F5C9);\n  filter: url(#recolorImageToFFF2AE);\n  filter: url(#recolorImageToF1E2CC);\n}\n/*\nGradients:\n*/\n.tooltip {\n  position: fixed;\n  z-index: 1001;\n  padding: 0.5em;\n  border-radius: 0.5em;\n  background: #252525;\n  color: #F7F7F7;\n  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);\n  pointer-events: none;\n  max-height: 250px;\n  overflow-y: auto;\n}\n.tooltip.interactive {\n  pointer-events: all;\n}\n.tooltip .menuItem {\n  margin: 0.5em 0;\n}\n.tooltip .menuItem.submenu {\n  margin-right: 1em;\n}\n.tooltip .menuItem.submenu:after {\n  content: '\\25b6';\n  color: #F7F7F7;\n  position: absolute;\n  right: -1em;\n  top: 0.75em;\n}\n";
 
 /* globals d3 */
 
-const { TooltipView, TooltipMixin } = createMixinAndDefault('TooltipMixin', View, superclass => {
-  class TooltipView extends RestylableMixin(superclass, defaultStyle$8, 'TooltipView') {
-    setup () {
-      super.setup();
-      this.d3el.classed('tooltip', true);
-      this.hide();
-    }
-    draw () {
-      super.draw();
-      // TODO: migrate a lot of the show() stuff here?
-    }
-    hide () {
-      this.show({ content: null });
-    }
-    /**
-       * @param  {String | Function} [content='']
-       * The message that will be displayed; a falsey value hides the tooltip.
-       * If, instead of a string, a function is supplied, that function will be
-       * called with a d3-selected div as its first argument (useful for more
-       * complex, custom tooltip contents)
-       * @param  {Object} [targetBounds=null]
-       * Specifies a target rectangle that the tooltip should be positioned
-       * relative to; usually element.getBoundingClientRect() will do the trick,
-       * but you could also specify a similarly-formatted custom rectangle
-       * @param  {Object} [anchor=null]
-       * Specifies -1 to 1 positioning of the tooltip relative to targetBounds;
-       * for example, { x: -1 } would right-align the tooltip to the left edge of
-       * targetBounds, { x: 0 } would center the tooltip horizontally, and
-       * { x: 1 } would left-align the tooltip to the right edge of targetBounds
-       * @param  {Boolean} [interactive = false]
-       * Specifies whether pointer-events should register on the tooltip
-       * element(s); if false, pointer events will pass through
-       * @param  {Number} [nestNew = 0]
-       * If true, adds an additional "tooltip"-classed element instead of
-       * replacing the existing one (useful for things like nested context menus)
-       */
-    async show ({
-      content = '',
-      targetBounds = null,
-      anchor = null,
-      hideAfterMs = 1000,
-      interactive = false,
-      nestNew = 0
-    } = {}) {
-      window.clearTimeout(this._tooltipTimeout);
-      const showEvent = d3.event;
-      d3.select('body').on('click.tooltip', () => {
-        if (showEvent === d3.event) {
-          // This is the same event that opened the tooltip; absorb the event to
-          // prevent flicker
-          d3.event.stopPropagation();
-        } else if (!interactive || !this.d3el.node().contains(d3.event.target)) {
-          // Only hide the tooltip if we interacted with something outside an
-          // interactive tooltip (otherwise don't mess with the event)
-          this.hide();
-        }
-      });
-
-      let tooltip = this.d3el;
-      if (nestNew > 0) {
-        this._nestedTooltips = this._nestedTooltips || [];
-        // Remove any existing tooltips at or deeper than this layer
-        while (this._nestedTooltips.length > nestNew) {
-          this._nestedTooltips.splice(this._nestedTooltips.length - 1, 1)[0].remove();
-        }
-        tooltip = this.d3el.append('div')
-          .classed('tooltip', true);
-        this._nestedTooltips[nestNew] = tooltip;
+const { TooltipView, TooltipViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: View,
+  classDefFunc: SuperClass => {
+    class TooltipView extends ThemeableMixin({
+      SuperClass, defaultStyle: defaultStyle$8, className: 'tooltip'
+    }) {
+      setup () {
+        super.setup(...arguments);
+        this.hide();
       }
-
-      tooltip
-        .classed('interactive', interactive)
-        .style('left', '-1000em')
-        .style('top', '-1000em')
-        .style('display', content ? null : 'none');
-
-      if (!content) {
-        d3.select('body').on('click.tooltip', null);
-        this._nestedTooltips = [];
-      } else {
-        if (typeof content === 'function') {
-          await content(tooltip);
-        } else {
-          tooltip.html(content);
-        }
-        let tooltipBounds = tooltip.node().getBoundingClientRect();
-
-        let left;
-        let top;
-
-        if (targetBounds === null) {
-          // todo: position the tooltip WITHIN the window, based on anchor,
-          // instead of outside the targetBounds
-          throw new Error('tooltips without targets are not yet supported');
-        } else {
-          anchor = anchor || {};
-          if (anchor.x === undefined) {
-            if (anchor.y !== undefined) {
-              // with y defined, default is to center x
-              anchor.x = 0;
-            } else {
-              if (targetBounds.left > window.innerWidth - targetBounds.right) {
-                // there's more space on the left; try to put it there
-                anchor.x = -1;
-              } else {
-                // more space on the right; try to put it there
-                anchor.x = 1;
-              }
-            }
-          }
-          if (anchor.y === undefined) {
-            if (anchor.x !== undefined) {
-              // with x defined, default is to center y
-              anchor.y = 0;
-            } else {
-              if (targetBounds.top > window.innerHeight - targetBounds.bottom) {
-                // more space above; try to put it there
-                anchor.y = -1;
-              } else {
-                // more space below; try to put it there
-                anchor.y = 1;
-              }
-            }
-          }
-          left = (targetBounds.left + targetBounds.right) / 2 +
-                 anchor.x * targetBounds.width / 2 -
-                 tooltipBounds.width / 2 +
-                 anchor.x * tooltipBounds.width / 2;
-          top = (targetBounds.top + targetBounds.bottom) / 2 +
-                anchor.y * targetBounds.height / 2 -
-                tooltipBounds.height / 2 +
-                anchor.y * tooltipBounds.height / 2;
-        }
-
-        // Clamp the tooltip so that it stays on screen
-        if (left + tooltipBounds.width > window.innerWidth) {
-          left = window.innerWidth - tooltipBounds.width;
-        }
-        if (left < 0) {
-          left = 0;
-        }
-        if (top + tooltipBounds.height > window.innerHeight) {
-          top = window.innerHeight - tooltipBounds.height;
-        }
-        if (top < 0) {
-          top = 0;
-        }
-        tooltip.style('left', left + 'px')
-          .style('top', top + 'px');
-
-        if (hideAfterMs > 0) {
-          this._tooltipTimeout = window.setTimeout(() => {
+      draw () {
+        super.draw(...arguments);
+        // TODO: migrate a lot of the show() stuff here?
+      }
+      hide () {
+        this.show({ content: null });
+      }
+      /**
+         * @param  {String | Function} [content='']
+         * The message that will be displayed; a falsey value hides the tooltip.
+         * If, instead of a string, a function is supplied, that function will be
+         * called with a d3-selected div as its first argument (useful for more
+         * complex, custom tooltip contents)
+         * @param  {Object} [targetBounds=null]
+         * Specifies a target rectangle that the tooltip should be positioned
+         * relative to; usually element.getBoundingClientRect() will do the trick,
+         * but you could also specify a similarly-formatted custom rectangle
+         * @param  {Object} [anchor=null]
+         * Specifies -1 to 1 positioning of the tooltip relative to targetBounds;
+         * for example, { x: -1 } would right-align the tooltip to the left edge of
+         * targetBounds, { x: 0 } would center the tooltip horizontally, and
+         * { x: 1 } would left-align the tooltip to the right edge of targetBounds
+         * @param  {Boolean} [interactive = false]
+         * Specifies whether pointer-events should register on the tooltip
+         * element(s); if false, pointer events will pass through
+         * @param  {Number} [nestNew = 0]
+         * If true, adds an additional "tooltip"-classed element instead of
+         * replacing the existing one (useful for things like nested context menus)
+         */
+      async show ({
+        content = '',
+        targetBounds = null,
+        anchor = null,
+        hideAfterMs = 1000,
+        interactive = false,
+        nestNew = 0
+      } = {}) {
+        window.clearTimeout(this._tooltipTimeout);
+        const showEvent = d3.event;
+        d3.select('body').on('click.tooltip', () => {
+          if (showEvent === d3.event) {
+            // This is the same event that opened the tooltip; absorb the event to
+            // prevent flicker
+            d3.event.stopPropagation();
+          } else if (!interactive || !this.d3el.node().contains(d3.event.target)) {
+            // Only hide the tooltip if we interacted with something outside an
+            // interactive tooltip (otherwise don't mess with the event)
             this.hide();
-          }, hideAfterMs);
+          }
+        });
+
+        let tooltip = this.d3el;
+        if (nestNew > 0) {
+          this._nestedTooltips = this._nestedTooltips || [];
+          // Remove any existing tooltips at or deeper than this layer
+          while (this._nestedTooltips.length > nestNew) {
+            this._nestedTooltips.splice(this._nestedTooltips.length - 1, 1)[0].remove();
+          }
+          tooltip = this.d3el.append('div')
+            .classed('tooltip', true);
+          this._nestedTooltips[nestNew] = tooltip;
+        }
+
+        tooltip
+          .classed('interactive', interactive)
+          .style('left', '-1000em')
+          .style('top', '-1000em')
+          .style('display', content ? null : 'none');
+
+        if (!content) {
+          d3.select('body').on('click.tooltip', null);
+          this._nestedTooltips = [];
+        } else {
+          if (typeof content === 'function') {
+            await content(tooltip);
+          } else {
+            tooltip.html(content);
+          }
+          let tooltipBounds = tooltip.node().getBoundingClientRect();
+
+          let left;
+          let top;
+
+          if (targetBounds === null) {
+            // todo: position the tooltip WITHIN the window, based on anchor,
+            // instead of outside the targetBounds
+            throw new Error('tooltips without targets are not yet supported');
+          } else {
+            anchor = anchor || {};
+            if (anchor.x === undefined) {
+              if (anchor.y !== undefined) {
+                // with y defined, default is to center x
+                anchor.x = 0;
+              } else {
+                if (targetBounds.left > window.innerWidth - targetBounds.right) {
+                  // there's more space on the left; try to put it there
+                  anchor.x = -1;
+                } else {
+                  // more space on the right; try to put it there
+                  anchor.x = 1;
+                }
+              }
+            }
+            if (anchor.y === undefined) {
+              if (anchor.x !== undefined) {
+                // with x defined, default is to center y
+                anchor.y = 0;
+              } else {
+                if (targetBounds.top > window.innerHeight - targetBounds.bottom) {
+                  // more space above; try to put it there
+                  anchor.y = -1;
+                } else {
+                  // more space below; try to put it there
+                  anchor.y = 1;
+                }
+              }
+            }
+            left = (targetBounds.left + targetBounds.right) / 2 +
+                   anchor.x * targetBounds.width / 2 -
+                   tooltipBounds.width / 2 +
+                   anchor.x * tooltipBounds.width / 2;
+            top = (targetBounds.top + targetBounds.bottom) / 2 +
+                  anchor.y * targetBounds.height / 2 -
+                  tooltipBounds.height / 2 +
+                  anchor.y * tooltipBounds.height / 2;
+          }
+
+          // Clamp the tooltip so that it stays on screen
+          if (left + tooltipBounds.width > window.innerWidth) {
+            left = window.innerWidth - tooltipBounds.width;
+          }
+          if (left < 0) {
+            left = 0;
+          }
+          if (top + tooltipBounds.height > window.innerHeight) {
+            top = window.innerHeight - tooltipBounds.height;
+          }
+          if (top < 0) {
+            top = 0;
+          }
+          tooltip.style('left', left + 'px')
+            .style('top', top + 'px');
+
+          if (hideAfterMs > 0) {
+            this._tooltipTimeout = window.setTimeout(() => {
+              this.hide();
+            }, hideAfterMs);
+          }
         }
       }
-    }
-    /**
-       * @param  {Array} [menuEntries]
-       * A list of objects for each menu item. Each object can have these
-       * properties:
-       * - A `content` property that is a string, a function, or an object. If a
-       *   string or object are provided, a `UkiButton` will be created (the
-       *   object will be passed to the `UkiButton` constructor, or the string
-       *   will be the `UkiButton`'s `label`). A function will be given a div
-       *   for custom formatting, and no `UkiButton` will be created. If
-       *  `content` is not provided or is falsey, a separator is drawn.
-       * - Either an `onClick` function that will be called when the menu entry is
-       *   clicked, or a `subEntries` list of additional menuEntries
-       * @param  {Object} [targetBounds=null]
-       * Specifies a target rectangle that the tooltip should be positioned
-       * relative to; usually element.getBoundingClientRect() will do the trick,
-       * but you could also specify a similarly-formatted custom rectangle
-       * @param  {Object} [anchor=null]
-       * Specifies -1 to 1 positioning of the tooltip relative to targetBounds;
-       * for example, { x: -1 } would right-align the tooltip to the left edge of
-       * targetBounds, { x: 0 } would center the tooltip horizontally, and
-       * { x: 1 } would left-align the tooltip to the right edge of targetBounds
-       * @param  {Number} [nestLayer = 0]
-       * This should be false for most use cases; it's used internally for nested
-       * context menus
-       */
-    async showContextMenu ({ menuEntries, targetBounds, anchor, nestNew = 0 } = {}) {
-      const self = this;
-      await this.show({
-        targetBounds,
-        anchor,
-        hideAfterMs: 0,
-        interactive: true,
-        nestNew,
-        content: async d3el => {
-          d3el.html('');
+      /**
+         * @param  {Array} [menuEntries]
+         * A list of objects for each menu item. Each object can have these
+         * properties:
+         * - A `content` property that is a string, a function, or an object. If a
+         *   string or object are provided, a `UkiButton` will be created (the
+         *   object will be passed to the `UkiButton` constructor, or the string
+         *   will be the `UkiButton`'s `label`). A function will be given a div
+         *   for custom formatting, and no `UkiButton` will be created. If
+         *  `content` is not provided or is falsey, a separator is drawn.
+         * - Either an `onClick` function that will be called when the menu entry is
+         *   clicked, or a `subEntries` list of additional menuEntries
+         * @param  {Object} [targetBounds=null]
+         * Specifies a target rectangle that the tooltip should be positioned
+         * relative to; usually element.getBoundingClientRect() will do the trick,
+         * but you could also specify a similarly-formatted custom rectangle
+         * @param  {Object} [anchor=null]
+         * Specifies -1 to 1 positioning of the tooltip relative to targetBounds;
+         * for example, { x: -1 } would right-align the tooltip to the left edge of
+         * targetBounds, { x: 0 } would center the tooltip horizontally, and
+         * { x: 1 } would left-align the tooltip to the right edge of targetBounds
+         * @param  {Number} [nestLayer = 0]
+         * This should be false for most use cases; it's used internally for nested
+         * context menus
+         */
+      async showContextMenu ({ menuEntries, targetBounds, anchor, nestNew = 0 } = {}) {
+        const self = this;
+        await this.show({
+          targetBounds,
+          anchor,
+          hideAfterMs: 0,
+          interactive: true,
+          nestNew,
+          content: async d3el => {
+            d3el.html('');
 
-          const menuItems = d3el.selectAll('.menuItem')
-            .data(menuEntries)
-            .enter().append('div')
-            .classed('menuItem', true)
-            .classed('submenu', d => !!d.subEntries);
-          const contentFuncPromises = [];
-          menuItems.each(function (d) {
-            let item;
-            if (!d.content) {
-              item = d3.select(this);
-              item.append('hr');
-            } else if (typeof d.content === 'function') {
-              item = d3.select(this);
-              contentFuncPromises.push(d.content(item));
-            } else {
-              const ukiProps = typeof d.content === 'object' ? d.content : { label: d.content };
-              Object.assign(ukiProps, { d3el: d3.select(this) });
-              item = new UkiButton(ukiProps);
-              contentFuncPromises.push(item.render());
-            }
-            item.on('click', function () {
-              if (d.onClick) {
-                d.onClick();
-                self.hide();
-              } else if (d.subEntries) {
-                let targetBounds = this instanceof UkiButton
-                  ? this.d3el.node().getBoundingClientRect()
-                  : this.getBoundingClientRect();
-                targetBounds = {
-                  left: targetBounds.left,
-                  right: targetBounds.right + TooltipView.SUBMENU_OFFSET,
-                  top: targetBounds.top,
-                  bottom: targetBounds.bottom,
-                  width: targetBounds.width + TooltipView.SUBMENU_OFFSET,
-                  height: targetBounds.height
-                };
-                self.showContextMenu({
-                  menuEntries: d.subEntries,
-                  targetBounds,
-                  anchor,
-                  interactive: true,
-                  nestNew: nestNew + 1
-                });
+            const menuItems = d3el.selectAll('.menuItem')
+              .data(menuEntries)
+              .enter().append('div')
+              .classed('menuItem', true)
+              .classed('submenu', d => !!d.subEntries);
+            const contentFuncPromises = [];
+            menuItems.each(function (d) {
+              let item;
+              if (!d.content) {
+                item = d3.select(this);
+                item.append('hr');
+              } else if (typeof d.content === 'function') {
+                item = d3.select(this);
+                contentFuncPromises.push(d.content(item));
+              } else {
+                const ukiProps = typeof d.content === 'object' ? d.content : { label: d.content };
+                Object.assign(ukiProps, { d3el: d3.select(this) });
+                item = new UkiButton(ukiProps);
+                contentFuncPromises.push(item.render());
               }
+              item.on('click', function () {
+                if (d.onClick) {
+                  d.onClick();
+                  self.hide();
+                } else if (d.subEntries) {
+                  let targetBounds = this instanceof UkiButton
+                    ? this.d3el.node().getBoundingClientRect()
+                    : this.getBoundingClientRect();
+                  targetBounds = {
+                    left: targetBounds.left,
+                    right: targetBounds.right + TooltipView.SUBMENU_OFFSET,
+                    top: targetBounds.top,
+                    bottom: targetBounds.bottom,
+                    width: targetBounds.width + TooltipView.SUBMENU_OFFSET,
+                    height: targetBounds.height
+                  };
+                  self.showContextMenu({
+                    menuEntries: d.subEntries,
+                    targetBounds,
+                    anchor,
+                    interactive: true,
+                    nestNew: nestNew + 1
+                  });
+                }
+              });
             });
-          });
-          await Promise.all(contentFuncPromises);
-        }
-      });
+            await Promise.all(contentFuncPromises);
+          }
+        });
+      }
     }
+    TooltipView.SUBMENU_OFFSET = 20;
+    return TooltipView;
   }
-  TooltipView.SUBMENU_OFFSET = 20;
-  return TooltipView;
 });
 
+const { AnimatedView, AnimatedViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: View,
+  classDefFunc: SuperClass => {
+    class AnimatedView extends SuperClass {
+      constructor (options) {
+        super(options);
+        this.stop = false;
+        this.framerate = options.framerate || 60;
+        this.on('drawFinished.AnimatedViewMixin', () => {
+          this.off('drawFinished.AnimatedViewMixin');
+          this.startAnimationLoop();
+        });
+      }
+      startAnimationLoop () {
+        this.stop = false;
+        const timestamp = () => {
+          return window.performance && window.performance.now ? window.performance.now() : new Date().getTime();
+        };
 
+        let now;
+        let dt = 0;
+        let last = timestamp();
+        let step = 1 / this.framerate;
+
+        const frame = () => {
+          if (this.stop) {
+            return;
+          }
+          now = timestamp();
+          dt = dt + Math.min(1, (now - last) / 1000);
+          while (dt > step) {
+            dt = dt - step;
+            this.drawFrame(this.d3el, dt);
+          }
+          last = now;
+          window.requestAnimationFrame(frame);
+        };
+        window.requestAnimationFrame(frame);
+      }
+      stopAnimationLoop () {
+        this.stop = true;
+      }
+      drawFrame (d3el, timeSinceLastFrame) {}
+    }
+    return AnimatedView;
+  }
+});
 
 var ui = /*#__PURE__*/Object.freeze({
   __proto__: null,
   LoadingView: LoadingView,
-  LoadingMixin: LoadingMixin,
+  LoadingViewMixin: LoadingViewMixin,
   EmptyStateView: EmptyStateView,
-  EmptyStateMixin: EmptyStateMixin,
+  EmptyStateViewMixin: EmptyStateViewMixin,
   ParentSizeView: ParentSizeView,
-  ParentSizeMixin: ParentSizeMixin,
+  ParentSizeViewMixin: ParentSizeViewMixin,
   SvgView: SvgView,
-  SvgMixin: SvgMixin,
+  SvgViewMixin: SvgViewMixin,
   IFrameView: IFrameView,
-  IFrameMixin: IFrameMixin,
+  IFrameViewMixin: IFrameViewMixin,
   UkiButton: UkiButton,
   UkiButtonMixin: UkiButtonMixin,
   ModalView: ModalView,
-  ModalMixin: ModalMixin,
+  ModalViewMixin: ModalViewMixin,
   TooltipView: TooltipView,
-  TooltipMixin: TooltipMixin,
-  RestylableMixin: RestylableMixin
+  TooltipViewMixin: TooltipViewMixin,
+  AnimatedView: AnimatedView,
+  AnimatedViewMixin: AnimatedViewMixin,
+  ThemeableMixin: ThemeableMixin
 });
 
 var defaultStyle$9 = ".BaseTableView table {\n  border-collapse: collapse;\n  font-size: 10.5pt;\n}\n.BaseTableView th {\n  background-color: #ccc;\n}\n.BaseTableView th,\n.BaseTableView td {\n  border: 1px solid #ccc;\n  text-align: left;\n  vertical-align: bottom;\n  padding: 2px;\n}\n.BaseTableView th > div,\n.BaseTableView td > div {\n  max-height: 4em;\n  max-width: 5em;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n.BaseTableView th {\n  position: sticky;\n  top: -1px;\n}\n";
@@ -1699,292 +1855,297 @@ var template$1 = "<table>\n  <thead>\n    <tr></tr>\n  </thead>\n  <tbody>\n  </
 
 /* globals d3 */
 
-const { BaseTableView, BaseTableMixin } = createMixinAndDefault('BaseTableMixin', View, superclass => {
-  class BaseTableView extends RestylableMixin(superclass, defaultStyle$9, 'BaseTableView') {
-    constructor (options) {
-      super(options);
-      // By default, keep the original order
-      this._rowSortFunc = options.rowSortFunc || null;
-      this._rowIndexMode = options.rowIndexMode || 'none';
-    }
-    get rowIndexMode () {
-      return this._rowIndexMode;
-    }
-    set rowIndexMode (value) {
-      this._rowIndexMode = value;
-      this.render();
-    }
-    get rowSortFunc () {
-      return this._rowSortFunc;
-    }
-    set rowSortFunc (func) {
-      this._rowSortFunc = func;
-      this.render();
-    }
-    getRawHeaders () {
-      const rawRows = this.getRawRows();
-      if (rawRows.length === 0) {
-        return [];
-      } else {
-        return Object.keys(rawRows[0]);
+const { BaseTableView, BaseTableViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: View,
+  classDefFunc: SuperClass => {
+    class BaseTableView extends ThemeableMixin({
+      SuperClass, defaultStyle: defaultStyle$9, className: 'BaseTableView'
+    }) {
+      constructor (options) {
+        super(options);
+        // By default, keep the original order
+        this._rowSortFunc = options.rowSortFunc || null;
+        this._rowIndexMode = options.rowIndexMode || 'none';
       }
-    }
-    getHeaders () {
-      let headers = this.getRawHeaders().map((data, index) => {
-        return { index, data };
-      });
-      if (this.rowIndexMode === 'rowIndex') {
-        headers.unshift({ index: 'rowIndex' });
-      } else if (this.rowIndexMode === 'itemIndex') {
-        headers.unshift({ index: 'itemIndex' });
+      get rowIndexMode () {
+        return this._rowIndexMode;
       }
-      return headers;
-    }
-    getRawRows () {
-      throw new Error(`getRows() not implemented by subclass`);
-    }
-    getRows () {
-      let rows = this.getRawRows().map((data, itemIndex) => {
-        return { itemIndex, rowIndex: itemIndex, data };
-      });
-      if (this.rowSortFunc) {
-        rows.sort(this.rowSortFunc);
-        rows.forEach((row, rowIndex) => {
-          row.rowIndex = rowIndex;
+      set rowIndexMode (value) {
+        this._rowIndexMode = value;
+        this.render();
+      }
+      get rowSortFunc () {
+        return this._rowSortFunc;
+      }
+      set rowSortFunc (func) {
+        this._rowSortFunc = func;
+        this.render();
+      }
+      getRawHeaders () {
+        const rawRows = this.getRawRows();
+        if (rawRows.length === 0) {
+          return [];
+        } else {
+          return Object.keys(rawRows[0]);
+        }
+      }
+      getHeaders () {
+        let headers = this.getRawHeaders().map((data, index) => {
+          return { index, data };
         });
+        if (this.rowIndexMode === 'rowIndex') {
+          headers.unshift({ index: 'rowIndex' });
+        } else if (this.rowIndexMode === 'itemIndex') {
+          headers.unshift({ index: 'itemIndex' });
+        }
+        return headers;
       }
-      return rows;
-    }
-    setup () {
-      super.setup();
-
-      this.d3el.html(template$1);
-    }
-    async showTooltip (tooltipArgs) {
-      // Can + should be overridden if there's a global Tooltip instance somewhere
-      if (!window.uki) {
-        window.uki = {};
+      getRawRows () {
+        throw new Error(`getRows() not implemented by subclass`);
       }
-      if (!window.uki.tooltip) {
-        window.uki.tooltip = new TooltipView({
-          d3el: d3.select('body').append('div')
+      getRows () {
+        let rows = this.getRawRows().map((data, itemIndex) => {
+          return { itemIndex, rowIndex: itemIndex, data };
         });
-        await window.uki.tooltip.render();
-      }
-      window.uki.tooltip.show(tooltipArgs);
-    }
-    draw () {
-      super.draw();
-
-      if (this.isHidden || this.isLoading || this.emptyMessage) {
-        return;
-      }
-      this.drawHeaders();
-      this.drawRows();
-      this.drawCells();
-    }
-    drawHeaders () {
-      const headersToDraw = this.getHeaders();
-
-      this.headers = this.d3el.select('thead tr')
-        .selectAll('th').data(headersToDraw, d => d.index)
-        .order();
-      this.headers.exit().remove();
-      const headersEnter = this.headers.enter().append('th');
-      this.headers = this.headers.merge(headersEnter);
-
-      headersEnter.append('div')
-        .filter(d => d.index === 'rowIndex' || d.index === 'itemIndex')
-        .classed('corner', true);
-      this.cornerHeader = this.headers.select('.corner');
-      if (!this.cornerHeader.node()) {
-        this.cornerHeader = null;
-      }
-      const self = this;
-      this.headers.select('div')
-        .each(function (d) {
-          const d3el = d3.select(this);
-          self.updateHeader(d3el, d);
-          self.updateHoverListeners(d3el, d);
-        });
-    }
-    updateHeader (d3el, header) {
-      d3el.text(header.data);
-    }
-    drawRows () {
-      this.rows = this.d3el.select('tbody')
-        .selectAll('tr').data(this.getRows(), d => d.itemIndex)
-        .order();
-      this.rows.exit().remove();
-      const rowsEnter = this.rows.enter().append('tr');
-      this.rows = this.rows.merge(rowsEnter);
-    }
-    drawCells () {
-      this.cells = this.rows.selectAll('td')
-        .data(row => this.getHeaders().map((header, columnIndex) => {
-          return {
-            headerData: header.data,
-            headerIndex: header.index,
-            columnIndex: columnIndex,
-            itemIndex: row.itemIndex,
-            rowIndex: row.rowIndex,
-            data: header.index === 'rowIndex' ? row.rowIndex
-              : header.index === 'itemIndex' ? row.itemIndex
-                : row.data[header.data]
-          };
-        }));
-      this.cells.exit().remove();
-      const cellsEnter = this.cells.enter().append('td');
-      this.cells = this.cells.merge(cellsEnter);
-
-      cellsEnter.append('div'); // wrapper needed for flexible styling, like limiting height
-      const self = this;
-      this.cells.select('div')
-        .each(function (d) {
-          const d3el = d3.select(this);
-          self.updateCell(d3el, d);
-          self.updateHoverListeners(d3el, d);
-        });
-    }
-    updateCell (d3el, cell) {
-      d3el.text(cell.data);
-    }
-    updateHoverListeners (d3el, item) {
-      // Show a tooltip on the parent td or th element if the contents are
-      // truncated by text-overflow: ellipsis
-      const element = d3el.node();
-      if (element.clientHeight < element.scrollHeight) {
-        d3el.on('mouseenter.baseTableView', () => {
-          this.showTooltip({
-            content: item.data === undefined || item.data === null ? null : item.data,
-            targetBounds: element.getBoundingClientRect()
+        if (this.rowSortFunc) {
+          rows.sort(this.rowSortFunc);
+          rows.forEach((row, rowIndex) => {
+            row.rowIndex = rowIndex;
           });
-        }).on('mouseleave.baseTableView', () => {
-          this.showTooltip({ content: null });
-        });
-      } else {
-        d3el.on('mouseenter.baseTableView', null)
-          .on('mouseleave.baseTableView', null);
+        }
+        return rows;
+      }
+      setup () {
+        super.setup(...arguments);
+
+        this.d3el.html(template$1);
+      }
+      async showTooltip (tooltipArgs) {
+        // Can + should be overridden if there's a global Tooltip instance somewhere
+        if (!window.uki) {
+          window.uki = {};
+        }
+        if (!window.uki.tooltip) {
+          window.uki.tooltip = new TooltipView({
+            d3el: d3.select('body').append('div')
+          });
+          await window.uki.tooltip.render();
+        }
+        window.uki.tooltip.show(tooltipArgs);
+      }
+      draw () {
+        super.draw(...arguments);
+
+        if (this.isHidden || this.isLoading || this.emptyMessage) {
+          return;
+        }
+        this.drawHeaders();
+        this.drawRows();
+        this.drawCells();
+      }
+      drawHeaders () {
+        const headersToDraw = this.getHeaders();
+
+        this.headers = this.d3el.select('thead tr')
+          .selectAll('th').data(headersToDraw, d => d.index)
+          .order();
+        this.headers.exit().remove();
+        const headersEnter = this.headers.enter().append('th');
+        this.headers = this.headers.merge(headersEnter);
+
+        headersEnter.append('div')
+          .filter(d => d.index === 'rowIndex' || d.index === 'itemIndex')
+          .classed('corner', true);
+        this.cornerHeader = this.headers.select('.corner');
+        if (!this.cornerHeader.node()) {
+          this.cornerHeader = null;
+        }
+        const self = this;
+        this.headers.select('div')
+          .each(function (d) {
+            const d3el = d3.select(this);
+            self.updateHeader(d3el, d);
+            self.updateHoverListeners(d3el, d);
+          });
+      }
+      updateHeader (d3el, header) {
+        d3el.text(header.data);
+      }
+      drawRows () {
+        this.rows = this.d3el.select('tbody')
+          .selectAll('tr').data(this.getRows(), d => d.itemIndex)
+          .order();
+        this.rows.exit().remove();
+        const rowsEnter = this.rows.enter().append('tr');
+        this.rows = this.rows.merge(rowsEnter);
+      }
+      drawCells () {
+        this.cells = this.rows.selectAll('td')
+          .data(row => this.getHeaders().map((header, columnIndex) => {
+            return {
+              headerData: header.data,
+              headerIndex: header.index,
+              columnIndex: columnIndex,
+              itemIndex: row.itemIndex,
+              rowIndex: row.rowIndex,
+              data: header.index === 'rowIndex' ? row.rowIndex
+                : header.index === 'itemIndex' ? row.itemIndex
+                  : row.data[header.data]
+            };
+          }));
+        this.cells.exit().remove();
+        const cellsEnter = this.cells.enter().append('td');
+        this.cells = this.cells.merge(cellsEnter);
+
+        cellsEnter.append('div'); // wrapper needed for flexible styling, like limiting height
+        const self = this;
+        this.cells.select('div')
+          .each(function (d) {
+            const d3el = d3.select(this);
+            self.updateCell(d3el, d);
+            self.updateHoverListeners(d3el, d);
+          });
+      }
+      updateCell (d3el, cell) {
+        d3el.text(cell.data);
+      }
+      updateHoverListeners (d3el, item) {
+        // Show a tooltip on the parent td or th element if the contents are
+        // truncated by text-overflow: ellipsis
+        const element = d3el.node();
+        if (element.clientHeight < element.scrollHeight) {
+          d3el.on('mouseenter.baseTableView', () => {
+            this.showTooltip({
+              content: item.data === undefined || item.data === null ? null : item.data,
+              targetBounds: element.getBoundingClientRect()
+            });
+          }).on('mouseleave.baseTableView', () => {
+            this.showTooltip({ content: null });
+          });
+        } else {
+          d3el.on('mouseenter.baseTableView', null)
+            .on('mouseleave.baseTableView', null);
+        }
       }
     }
+    return BaseTableView;
   }
-  return BaseTableView;
-}, true);
+});
 
 var gearIcon = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n<svg\n   xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n   xmlns:cc=\"http://creativecommons.org/ns#\"\n   xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n   xmlns:svg=\"http://www.w3.org/2000/svg\"\n   xmlns=\"http://www.w3.org/2000/svg\"\n   xmlns:sodipodi=\"http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd\"\n   xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\"\n   sodipodi:docname=\"gear.svg\"\n   inkscape:version=\"1.0 (4035a4fb49, 2020-05-01)\"\n   id=\"svg8\"\n   version=\"1.1\"\n   viewBox=\"0 0 511.41864 512\"\n   height=\"512\"\n   width=\"511.41864\">\n  <defs\n     id=\"defs2\" />\n  <sodipodi:namedview\n     fit-margin-bottom=\"0\"\n     fit-margin-right=\"0\"\n     fit-margin-left=\"0\"\n     fit-margin-top=\"0\"\n     inkscape:document-rotation=\"0\"\n     inkscape:pagecheckerboard=\"false\"\n     inkscape:window-maximized=\"1\"\n     inkscape:window-y=\"-12\"\n     inkscape:window-x=\"-12\"\n     inkscape:window-height=\"1890\"\n     inkscape:window-width=\"3000\"\n     units=\"px\"\n     showgrid=\"true\"\n     inkscape:current-layer=\"layer1\"\n     inkscape:document-units=\"px\"\n     inkscape:cy=\"405.52354\"\n     inkscape:cx=\"165.62285\"\n     inkscape:zoom=\"0.7\"\n     inkscape:pageshadow=\"2\"\n     inkscape:pageopacity=\"0.0\"\n     borderopacity=\"1.0\"\n     bordercolor=\"#666666\"\n     pagecolor=\"#ffffff\"\n     id=\"base\">\n    <inkscape:grid\n       originy=\"-479.8705\"\n       originx=\"-106.04959\"\n       spacingy=\"20\"\n       spacingx=\"20\"\n       id=\"grid1358\"\n       type=\"xygrid\" />\n  </sodipodi:namedview>\n  <metadata\n     id=\"metadata5\">\n    <rdf:RDF>\n      <cc:Work\n         rdf:about=\"\">\n        <dc:format>image/svg+xml</dc:format>\n        <dc:type\n           rdf:resource=\"http://purl.org/dc/dcmitype/StillImage\" />\n        <dc:title></dc:title>\n      </cc:Work>\n    </rdf:RDF>\n  </metadata>\n  <g\n     transform=\"translate(-106.04959,-491.12051)\"\n     id=\"layer1\"\n     inkscape:groupmode=\"layer\"\n     inkscape:label=\"Layer 1\">\n    <path\n       id=\"path859\"\n       d=\"m 329.33072,1000.8335 c -6.98056,-3.12316 -16.17441,-13.40405 -17.44655,-19.50953 -0.48794,-2.34175 -1.23015,-12.19351 -1.64933,-21.89283 -0.85788,-19.84951 -3.8765,-26.99802 -14.46418,-34.25271 -8.38236,-5.74376 -21.68441,-7.29075 -29.21063,-3.39692 -3.14227,1.62556 -9.90171,7.0274 -15.02097,12.00384 -13.32301,12.95164 -20.48928,16.81236 -31.22345,16.82078 -14.17987,0.0196 -18.77379,-2.68564 -39.37481,-23.11652 -15.78953,-15.65902 -19.6681,-20.69914 -22.03329,-28.63181 -4.26917,-14.31834 -1.41503,-22.2179 13.93077,-38.55724 6.9483,-7.39813 13.50063,-15.73269 14.56078,-18.521 5.0312,-13.233 0.20316,-27.60603 -12.41723,-36.96558 -4.49991,-3.33715 -9.41639,-4.30473 -26.45269,-5.20628 -17.40832,-0.92114 -22.07977,-1.86776 -27.79283,-5.63208 -14.07512,-9.27411 -14.68672,-11.20437 -14.68672,-46.35332 0,-35.53419 0.85904,-38.60859 13.17205,-47.14164 6.84329,-4.74228 9.97818,-5.43828 28.9536,-6.42702 17.399,-0.90664 22.28732,-1.85639 26.80659,-5.20804 12.62039,-9.35955 17.44843,-23.73237 12.41723,-36.96538 -1.06013,-2.78851 -7.63842,-11.1505 -14.61843,-18.58234 -6.98,-7.43203 -13.24031,-16.00956 -13.9118,-19.06122 -0.67151,-3.05185 -1.54926,-6.62159 -1.9506,-7.93306 -0.40134,-1.31166 0.52862,-6.6218 2.06658,-11.80076 2.2563,-7.59776 6.11819,-12.67225 19.99808,-26.27724 21.69485,-21.26519 28.01536,-25.16265 40.82154,-25.17212 11.25431,-0.008 22.43719,6.05021 34.18428,18.51999 12.92373,13.71878 25.87742,16.43207 40.02191,8.38301 11.84254,-6.73913 16.80239,-17.88429 16.80239,-37.75624 0,-19.39387 3.17036,-28.03709 13.04883,-35.5743 l 7.21554,-5.50543 h 31.84873 c 29.24484,0 32.30134,0.33513 37.38468,4.09909 11.23648,8.32001 14.35353,15.51416 14.35353,33.12799 0,18.50805 2.35876,27.12065 9.57403,34.95796 6.85223,7.44292 14.26484,11.09194 22.53217,11.09194 10.54201,0 16.27037,-3.01609 29.32404,-15.4397 14.79368,-14.07963 18.20385,-15.91163 29.61871,-15.91163 13.83084,0 20.06425,3.80754 40.51878,24.74992 28.46179,29.14062 29.98342,40.58709 8.44409,63.52099 -18.70942,19.92084 -21.85956,28.67609 -15.65788,43.51879 3.20779,7.67736 12.8525,16.66833 19.32742,18.01742 2.34177,0.48791 12.2495,1.19233 22.01718,1.56521 14.38919,0.54924 18.89535,1.48684 23.74482,4.94 12.54543,8.93297 13.36056,11.82964 13.36056,47.47141 0,30.2795 -0.27647,32.71862 -4.35802,38.44064 -7.84803,11.00216 -13.25711,13.14835 -36.16203,14.34833 -16.95876,0.88822 -21.9503,1.86187 -26.33161,5.13613 -8.32298,6.21971 -12.68897,13.15601 -13.88263,22.05547 -1.51419,11.28903 2.04642,18.96285 15.16747,32.68828 14.02411,14.67008 15.60067,17.7813 15.60067,30.78643 0,12.8176 -1.4131,15.04923 -24.27885,38.34327 -14.27908,14.54643 -19.67271,18.72733 -26.96415,20.90135 -14.99475,4.4707 -26.16574,0.40816 -41.83129,-15.21285 -4.3108,-4.29866 -10.4831,-9.44106 -13.71621,-11.42776 -10.42635,-6.40703 -24.53884,-4.06235 -34.94089,5.80509 -8.48494,8.04888 -11.10638,16.4481 -11.10638,35.58495 0,14.51391 -0.66808,18.08776 -4.40878,23.58405 -9.27289,13.62442 -12.25222,14.62382 -45.20362,15.15972 -21.78684,0.3545 -31.3445,-0.2314 -35.7212,-2.1895 z m 66.14183,-151.70734 c 25.94628,-8.67864 50.90012,-29.62427 61.67158,-51.76537 10.87443,-22.35253 11.4053,-24.70466 11.4053,-50.53089 0,-20.84512 -0.66708,-26.21011 -4.47857,-36.02014 -12.48715,-32.13944 -36.29306,-55.1909 -68.59831,-66.42428 -13.92116,-4.84065 -45.64323,-5.67714 -60.1663,-1.58657 -36.79417,10.36377 -66.89093,40.72832 -76.63263,77.31436 -3.17209,11.91331 -3.54206,40.13831 -0.67125,51.20984 10.92692,42.14031 44.25552,73.17324 88.0809,82.01393 9.57758,1.93202 38.36085,-0.522 49.38928,-4.21088 z\"\n       style=\"fill:#000000;stroke-width:1\" />\n  </g>\n</svg>\n";
 
 /* globals d3 */
 
-const { FlexTableView, FlexTableMixin } = createMixinAndDefault('FlexTableMixin', BaseTableView, superclass => {
-  class FlexTableView extends superclass {
-    constructor (options) {
-      // FlexTable uses the corner header for its menu; showing either
-      // itemIndex or rowIndex is recommended, so itemIndex is enabled by
-      // default
-      options.rowIndexMode = options.rowIndexMode || 'itemIndex';
-      super(options);
+const { FlexTableView, FlexTableViewMixin } = createMixinAndDefault({
+  DefaultSuperClass: BaseTableView,
+  classDefFunc: SuperClass => {
+    class FlexTableView extends SuperClass {
+      constructor (options) {
+        // FlexTable uses the corner header for its menu; showing either
+        // itemIndex or rowIndex is recommended, so itemIndex is enabled by
+        // default
+        options.rowIndexMode = options.rowIndexMode || 'itemIndex';
+        super(options);
 
-      // By default, show all headers in their original order
-      this.visibleHeaderIndices = null;
-    }
-    getHeaders () {
-      const headers = super.getHeaders();
-      if (this.visibleHeaderIndices === null) {
-        return headers;
-      } else {
-        return this.visibleHeaderIndices.map(headerIndex => {
-          return headers.find(h => h.index === headerIndex);
-        });
+        // By default, show all headers in their original order
+        this.visibleHeaderIndices = null;
       }
-    }
-    drawFlexMenu (tooltipEl) {
-      const fullHeaderList = super.getHeaders();
-      if (this.rowIndexMode !== 'none') {
-        fullHeaderList.splice(0, 1);
-      }
-
-      tooltipEl.html(`<h3>Show columns:</h3><ul style="padding:0"></ul>`);
-
-      let listItems = tooltipEl.select('ul')
-        .selectAll('li').data(fullHeaderList);
-      listItems.exit().remove();
-      const listItemsEnter = listItems.enter().append('li');
-      listItems = listItems.merge(listItemsEnter);
-
-      listItems
-        .style('max-width', '15em')
-        .style('list-style', 'none')
-        .on('click', () => {
-          d3.event.stopPropagation();
-        });
-
-      listItemsEnter.append('input')
-        .attr('type', 'checkbox')
-        .attr('id', (d, i) => `attrCheckbox${i}`)
-        .property('checked', d => this.headerIsVisible(d.index))
-        .on('change', d => {
-          this.toggleHeader(d);
-        });
-      listItemsEnter.append('label')
-        .attr('for', (d, i) => `attrCheckbox${i}`)
-        .text(d => d.data);
-    }
-    headerIsVisible (headerIndex) {
-      return this.visibleHeaderIndices === null ||
-        this.visibleHeaderIndices.indexOf(headerIndex) !== -1;
-    }
-    updateHeader (d3el, header) {
-      if (d3el.node() === this.cornerHeader.node()) {
-        if (!this.attributeSelector) {
-          this.attributeSelector = new UkiButton({
-            d3el: this.cornerHeader.append('div').classed('attributeSelector', true),
-            img: URL.createObjectURL(new window.Blob([gearIcon], { type: 'image/svg+xml' })),
-            size: 'small'
+      getHeaders () {
+        const headers = super.getHeaders();
+        if (this.visibleHeaderIndices === null) {
+          return headers;
+        } else {
+          return this.visibleHeaderIndices.map(headerIndex => {
+            return headers.find(h => h.index === headerIndex);
           });
         }
-        this.attributeSelector.on('click', () => {
-          this.showTooltip({
-            content: tooltipEl => { this.drawFlexMenu(tooltipEl); },
-            targetBounds: this.attributeSelector.d3el.node().getBoundingClientRect(),
-            interactive: true,
-            hideAfterMs: 0
+      }
+      drawFlexMenu (tooltipEl) {
+        const fullHeaderList = super.getHeaders();
+        if (this.rowIndexMode !== 'none') {
+          fullHeaderList.splice(0, 1);
+        }
+
+        tooltipEl.html(`<h3>Show columns:</h3><ul style="padding:0"></ul>`);
+
+        let listItems = tooltipEl.select('ul')
+          .selectAll('li').data(fullHeaderList);
+        listItems.exit().remove();
+        const listItemsEnter = listItems.enter().append('li');
+        listItems = listItems.merge(listItemsEnter);
+
+        listItems
+          .style('max-width', '15em')
+          .style('list-style', 'none')
+          .on('click', () => {
+            d3.event.stopPropagation();
           });
-        });
-      } else {
-        super.updateHeader(d3el, header);
+
+        listItemsEnter.append('input')
+          .attr('type', 'checkbox')
+          .attr('id', (d, i) => `attrCheckbox${i}`)
+          .property('checked', d => this.headerIsVisible(d.index))
+          .on('change', d => {
+            this.toggleHeader(d);
+          });
+        listItemsEnter.append('label')
+          .attr('for', (d, i) => `attrCheckbox${i}`)
+          .text(d => d.data);
+      }
+      headerIsVisible (headerIndex) {
+        return this.visibleHeaderIndices === null ||
+          this.visibleHeaderIndices.indexOf(headerIndex) !== -1;
+      }
+      updateHeader (d3el, header) {
+        if (d3el.node() === this.cornerHeader.node()) {
+          if (!this.attributeSelector) {
+            this.attributeSelector = new UkiButton({
+              d3el: this.cornerHeader.append('div').classed('attributeSelector', true),
+              img: URL.createObjectURL(new window.Blob([gearIcon], { type: 'image/svg+xml' })),
+              size: 'small'
+            });
+          }
+          this.attributeSelector.on('click', () => {
+            this.showTooltip({
+              content: tooltipEl => { this.drawFlexMenu(tooltipEl); },
+              targetBounds: this.attributeSelector.d3el.node().getBoundingClientRect(),
+              interactive: true,
+              hideAfterMs: 0
+            });
+          });
+        } else {
+          super.updateHeader(d3el, header);
+        }
+      }
+      toggleHeader (header) {
+        if (this.visibleHeaderIndices === null) {
+          // Show all but the header toggled
+          this.visibleHeaderIndices = this.getHeaders().map(h2 => h2.index);
+        }
+        const index = this.visibleHeaderIndices.indexOf(header.index);
+        if (index === -1) {
+          this.visibleHeaderIndices.push(header.index);
+        } else {
+          this.visibleHeaderIndices.splice(index, 1);
+        }
+        this.render();
       }
     }
-    toggleHeader (header) {
-      if (this.visibleHeaderIndices === null) {
-        // Show all but the header toggled
-        this.visibleHeaderIndices = this.getHeaders().map(h2 => h2.index);
-      }
-      const index = this.visibleHeaderIndices.indexOf(header.index);
-      if (index === -1) {
-        this.visibleHeaderIndices.push(header.index);
-      } else {
-        this.visibleHeaderIndices.splice(index, 1);
-      }
-      this.render();
-    }
+    return FlexTableView;
   }
-  return FlexTableView;
-}, true);
-
-
+});
 
 var table = /*#__PURE__*/Object.freeze({
   __proto__: null,
   BaseTableView: BaseTableView,
-  BaseTableMixin: BaseTableMixin,
+  BaseTableViewMixin: BaseTableViewMixin,
   FlexTableView: FlexTableView,
-  FlexTableMixin: FlexTableMixin
+  FlexTableViewMixin: FlexTableViewMixin
 });
-
-
 
 var utils = /*#__PURE__*/Object.freeze({
   __proto__: null,
+  createMixinAndDefault: createMixinAndDefault,
   Introspectable: Introspectable,
   IntrospectableMixin: IntrospectableMixin,
   recolorImageFilter: recolorImageFilter
