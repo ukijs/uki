@@ -1,7 +1,7 @@
 /* globals d3 */
 import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
 import View from '../../View.js';
-import { ThemeableMixin } from '../ThemeableMixin/ThemeableMixin.js';
+import { ThemeableMixin } from '../../style/ThemeableMixin/ThemeableMixin.js';
 import defaultStyle from './style.less';
 
 const { LoadingView, LoadingViewMixin } = createMixinAndDefault({

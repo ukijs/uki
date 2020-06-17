@@ -2,7 +2,7 @@
 import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
 import { SvgViewMixin } from '../../ui/SvgView/SvgView.js';
 import { GLView } from '../GLView/GLView.js';
-import { ThemeableMixin } from '../../ui/ThemeableMixin/ThemeableMixin.js';
+import { ThemeableMixin } from '../../style/ThemeableMixin/ThemeableMixin.js';
 import defaultStyle from './style.less';
 
 const { SvgGLView, SvgGLViewMixin } = createMixinAndDefault({

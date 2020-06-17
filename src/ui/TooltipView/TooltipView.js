@@ -1,8 +1,8 @@
 /* globals d3 */
 import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
 import View from '../../View.js';
-import { ThemeableMixin } from '../ThemeableMixin/ThemeableMixin.js';
-import { UkiButton } from '../UkiButton/UkiButton.js';
+import { ThemeableMixin } from '../../style/ThemeableMixin/ThemeableMixin.js';
+import { Button } from '../Button/Button.js';
 import defaultStyle from './style.less';
 
 const { TooltipView, TooltipViewMixin } = createMixinAndDefault({
@@ -170,10 +170,10 @@ const { TooltipView, TooltipViewMixin } = createMixinAndDefault({
          * A list of objects for each menu item. Each object can have these
          * properties:
          * - A `content` property that is a string, a function, or an object. If a
-         *   string or object are provided, a `UkiButton` will be created (the
-         *   object will be passed to the `UkiButton` constructor, or the string
-         *   will be the `UkiButton`'s `label`). A function will be given a div
-         *   for custom formatting, and no `UkiButton` will be created. If
+         *   string or object are provided, a `Button` will be created (the
+         *   object will be passed to the `Button` constructor, or the string
+         *   will be the `Button`'s `label`). A function will be given a div
+         *   for custom formatting, and no `Button` will be created. If
          *  `content` is not provided or is falsey, a separator is drawn.
          * - Either an `onClick` function that will be called when the menu entry is
          *   clicked, or a `subEntries` list of additional menuEntries
@@ -219,7 +219,7 @@ const { TooltipView, TooltipViewMixin } = createMixinAndDefault({
               } else {
                 const ukiProps = typeof d.content === 'object' ? d.content : { label: d.content };
                 Object.assign(ukiProps, { d3el: d3.select(this) });
-                item = new UkiButton(ukiProps);
+                item = new Button(ukiProps);
                 butTemp.push(item);
                 contentFuncPromises.push(item.render());
               }
@@ -228,7 +228,7 @@ const { TooltipView, TooltipViewMixin } = createMixinAndDefault({
                   d.onClick();
                   self.hide();
                 } else if (d.subEntries) {
-                  let targetBounds = this instanceof UkiButton
+                  let targetBounds = this instanceof Button
                     ? this.d3el.node().getBoundingClientRect()
                     : this.getBoundingClientRect();
                   targetBounds = {

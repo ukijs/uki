@@ -1,8 +1,7 @@
 /* globals d3 */
 import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
 import View from '../../View.js';
-import { ThemeableMixin } from '../../ui/ThemeableMixin/ThemeableMixin.js';
-import { TooltipView } from '../../ui/TooltipView/TooltipView.js';
+import { ThemeableMixin } from '../../style/ThemeableMixin/ThemeableMixin.js';
 import defaultStyle from './style.less';
 import template from './template.html';
 
@@ -70,19 +69,6 @@ const { BaseTableView, BaseTableViewMixin } = createMixinAndDefault({
         super.setup(...arguments);
 
         this.d3el.html(template);
-      }
-      async showTooltip (tooltipArgs) {
-        // Can + should be overridden if there's a global Tooltip instance somewhere
-        if (!window.uki) {
-          window.uki = {};
-        }
-        if (!window.uki.tooltip) {
-          window.uki.tooltip = new TooltipView({
-            d3el: d3.select('body').append('div')
-          });
-          await window.uki.tooltip.render();
-        }
-        window.uki.tooltip.show(tooltipArgs);
       }
       draw () {
         super.draw(...arguments);
@@ -166,12 +152,12 @@ const { BaseTableView, BaseTableViewMixin } = createMixinAndDefault({
         const element = d3el.node();
         if (element.clientHeight < element.scrollHeight) {
           d3el.on('mouseenter.baseTableView', () => {
-            this.showTooltip({
+            window.uki.showTooltip({
               content: item.data === undefined || item.data === null ? null : item.data,
               targetBounds: element.getBoundingClientRect()
             });
           }).on('mouseleave.baseTableView', () => {
-            this.showTooltip({ content: null });
+            window.uki.showTooltip({ content: null });
           });
         } else {
           d3el.on('mouseenter.baseTableView', null)

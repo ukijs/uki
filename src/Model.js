@@ -60,8 +60,8 @@ class Model {
       document.getElementsByTagName('head')[0].appendChild(link);
       return loadPromise;
     } else if (raw !== undefined) {
-      if (Model.RAW_CSS[raw]) {
-        return;
+      if (Model.RAW_CSS_PROMISES[raw]) {
+        return Model.RAW_CSS_PROMISES[raw];
       }
       const style = document.createElement('style');
       style.type = 'text/css';
@@ -73,9 +73,9 @@ class Model {
       } else {
         style.innerHTML = raw;
       }
-      Model.RAW_CSS[raw] = true;
       document.getElementsByTagName('head')[0].appendChild(style);
-      return Promise.resolve(style);
+      Model.RAW_CSS_PROMISES[raw] = Promise.resolve(style);
+      return Model.RAW_CSS_PROMISES[raw];
     } else {
       throw new Error('Either a url or raw argument is required for CSS resources');
     }
@@ -294,6 +294,6 @@ class Model {
 }
 Model.LESS_PROMISES = {};
 Model.JS_PROMISES = {};
-Model.RAW_CSS = {};
+Model.RAW_CSS_PROMISES = {};
 
 export default Model;

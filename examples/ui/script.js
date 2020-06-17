@@ -7,8 +7,7 @@ import { goldenlayout, ui } from '../uki.esm.js';
  */
 
 /* eslint-disable indent */
-class BasicDemoView extends ui.LoadingViewMixin(
-                            ui.EmptyStateViewMixin(goldenlayout.GLView)) {
+class BasicDemoView extends ui.LoadingViewMixin(goldenlayout.GLView) {
   constructor (options) {
     options.resources = [{
       type: 'text',
@@ -19,11 +18,7 @@ class BasicDemoView extends ui.LoadingViewMixin(
   }
   setup () {
     super.setup(...arguments);
-    this.d3el.html(this.getNamedResource('lipsum'))
-      .style('color', 'rgba(0,0,0,0.2)');
-  }
-  get emptyMessage () {
-    return `This is a basic view; by default its contents scroll.`;
+    this.d3el.html(this.getNamedResource('lipsum'));
   }
 }
 
@@ -38,32 +33,29 @@ class ModalLauncherView extends goldenlayout.GLView {
     this.d3el.style('padding', '1em');
 
     for (const disabled of [false, true]) {
-      for (const selected of [false, true]) {
+      for (const primary of [false, true]) {
         for (const showBadge of [false, true]) {
+          const wrapper = this.d3el.append('div');
           for (const img of [undefined, 'openIcon.svg']) {
             for (const label of [undefined, 'Show Modal']) {
-              const wrapper = this.d3el.append('div');
-              for (const size of [undefined, 'small', 'tiny']) {
-                this.createButton(wrapper, size, img, label, showBadge, disabled, selected);
-              }
+              this.createButton(wrapper, img, label, showBadge, disabled, primary);
             }
           }
         }
       }
     }
   }
-  createButton (wrapper, size, img, label, showBadge, disabled, selected) {
+  createButton (wrapper, img, label, showBadge, disabled, primary) {
     const container = wrapper.append('div')
       .style('display', 'inline-block');
     let count = 0;
-    const button = new ui.UkiButton({
+    const button = new ui.Button({
       d3el: container.append('div'),
       label,
       img,
-      size,
       badge: showBadge ? 0 : undefined,
       disabled,
-      selected
+      primary
     });
     const modalResult = container.append('div')
       .style('margin-top', '1em');
@@ -94,15 +86,14 @@ class ModalLauncherView extends goldenlayout.GLView {
       window.tooltip.showContextMenu({
         targetBounds: this.getBoundingClientRect(),
         menuEntries: [
-          { content: { label, img, size, badge: count, disabled, selected }, onClick: showModalFunc },
+          { content: { label, img, badge: count, disabled, primary }, onClick: showModalFunc },
           { content: null },
           { content: 'Button properties',
             subEntries: [
             { content: 'badge: ' + (count === 0 && !showBadge ? 'hidden' : count) },
             { content: 'label: ' + (label || '(no label)') },
             { content: 'img: ' + (img || '(no img)') },
-            { content: 'size: ' + (size || '(default)') },
-            { content: 'selected: ' + selected.toString() },
+            { content: 'primary: ' + primary.toString() },
             { content: 'disabled: ' + disabled.toString() }
           ] },
           { content: null },
@@ -134,7 +125,8 @@ class SvgDemoView extends ui.LoadingViewMixin(
       const coords = d3.mouse(this);
       circle
         .attr('cx', coords[0])
-        .attr('cy', coords[1]);
+        .attr('cy', coords[1])
+        .style('fill', 'var(--text-color-softer)');
     });
   }
   drawFrame () {

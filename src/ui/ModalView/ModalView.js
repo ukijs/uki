@@ -1,7 +1,7 @@
 import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
 import View from '../../View.js';
-import { ThemeableMixin } from '../ThemeableMixin/ThemeableMixin.js';
-import { UkiButton } from '../UkiButton/UkiButton.js';
+import { ThemeableMixin } from '../../style/ThemeableMixin/ThemeableMixin.js';
+import { Button } from '../Button/Button.js';
 import defaultStyle from './style.less';
 import template from './template.html';
 
@@ -21,7 +21,7 @@ const { ModalView, ModalViewMixin } = createMixinAndDefault({
           {
             label: 'OK',
             className: 'ok',
-            selected: true,
+            primary: true,
             onclick: () => { this.hide(); }
           }
         ];
@@ -50,7 +50,7 @@ const { ModalView, ModalViewMixin } = createMixinAndDefault({
         this.buttonWrapper.html('');
         for (const spec of buttonSpecs) {
           spec.d3el = this.buttonWrapper.append('div');
-          const button = new UkiButton(spec);
+          const button = new Button(spec);
           button.on('click', () => { spec.onclick.call(this); });
         }
       }

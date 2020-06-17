@@ -1,15 +1,15 @@
 import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
 import View from '../../View.js';
-import { ThemeableMixin } from '../ThemeableMixin/ThemeableMixin.js';
+import { ThemeableMixin } from '../../style/ThemeableMixin/ThemeableMixin.js';
+import { RecolorableImageViewMixin } from '../../style/RecolorableImageView/RecolorableImageView.js';
 import defaultStyle from './style.less';
-import recolorImageFilter from '../../utils/recolorImageFilter.js';
 
-const { UkiButton, UkiButtonMixin } = createMixinAndDefault({
+const { Button, ButtonMixin } = createMixinAndDefault({
   DefaultSuperClass: View,
   classDefFunc: SuperClass => {
-    class UkiButton extends ThemeableMixin({
+    class Button extends RecolorableImageViewMixin(ThemeableMixin({
       SuperClass, defaultStyle, className: 'UkiButton'
-    }) {
+    })) {
       constructor (options) {
         super(options);
 
@@ -17,7 +17,7 @@ const { UkiButton, UkiButtonMixin } = createMixinAndDefault({
         this._label = options.label;
         this._img = options.img;
         this._disabled = options.disabled || false;
-        this._selected = options.selected || false;
+        this._primary = options.primary || false;
         this._badge = options.badge;
       }
       set size (value) {
@@ -48,12 +48,12 @@ const { UkiButton, UkiButtonMixin } = createMixinAndDefault({
       get disabled () {
         return this._disabled;
       }
-      set selected (value) {
-        this._selected = value;
+      set primary (value) {
+        this._primary = value;
         this.render();
       }
-      get selected () {
-        return this._selected;
+      get primary () {
+        return this._primary;
       }
       set badge (value) {
         this._badge = value;
@@ -64,8 +64,7 @@ const { UkiButton, UkiButtonMixin } = createMixinAndDefault({
       }
       setup () {
         super.setup(...arguments);
-        recolorImageFilter();
-        this.d3el.append('a');
+        this.d3el.classed('button', true);
         this.d3el.append('img')
           .style('display', 'none');
         this.d3el.append('div')
@@ -86,16 +85,16 @@ const { UkiButton, UkiButtonMixin } = createMixinAndDefault({
 
         this.d3el
           .classed('small', this.size === 'small')
-          .classed('tiny', this.size === 'tiny')
-          .classed('selected', this.selected)
-          .classed('disabled', this.disabled);
+          .classed('button-primary', this.primary)
+          .classed('button-disabled', this.disabled)
+          .classed('hasImg', this.img)
+          .classed('imgOnly', this.img && this.label === undefined);
 
         this.d3el.select('img')
           .style('display', this.img ? null : 'none')
           .attr('src', this.img);
 
         this.d3el.select('.label')
-          .classed('labelOnly', !this.img)
           .style('display', this.label === undefined ? 'none' : null)
           .text(this.label);
 
@@ -104,7 +103,7 @@ const { UkiButton, UkiButtonMixin } = createMixinAndDefault({
           .text(this.badge);
       }
     }
-    return UkiButton;
+    return Button;
   }
 });
-export { UkiButton, UkiButtonMixin };
+export { Button, ButtonMixin };

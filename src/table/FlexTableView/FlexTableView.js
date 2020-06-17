@@ -1,7 +1,7 @@
 /* globals d3 */
 import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
 import { BaseTableView } from '../BaseTableView/BaseTableView.js';
-import { UkiButton } from '../../ui/UkiButton/UkiButton.js';
+import { Button } from '../../ui/Button/Button.js';
 import gearIcon from './gear.svg';
 
 const { FlexTableView, FlexTableViewMixin } = createMixinAndDefault({
@@ -67,7 +67,7 @@ const { FlexTableView, FlexTableViewMixin } = createMixinAndDefault({
       updateHeader (d3el, header) {
         if (d3el.node() === this.cornerHeader.node()) {
           if (!this.attributeSelector) {
-            this.attributeSelector = new UkiButton({
+            this.attributeSelector = new Button({
               d3el: this.cornerHeader.append('div').classed('attributeSelector', true),
               img: URL.createObjectURL(new window.Blob([gearIcon], { type: 'image/svg+xml' })),
               size: 'small'

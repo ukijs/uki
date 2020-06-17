@@ -9,9 +9,13 @@ const allExternals = peerDependencies.concat(
   Object.keys(pkg.devDependencies || {}));
 const commonPlugins = [
   string({
-    include: ['**/*.html', '**/*.svg']
+    include: ['**/*.css', '**/*.html', '**/*.svg']
   }),
-  less({ output: false })
+  less({
+    include: ['**/*.less'],
+    output: false,
+    insert: false
+  })
 ];
 
 // Basic build formats, without minification

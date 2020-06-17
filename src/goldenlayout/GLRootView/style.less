@@ -1,16 +1,14 @@
-@import '../../ui/defaultLessVars.less';
-
-@color0: @backgroundColor; // Panel background; appears 3 times
-@color1: @shadowColor; // Shadow color; appears 4 times
-@color2: @separatorColor; // Panel border color; appears 3 times
-@color3: @textColor; // Active tab text color; appears 2 times
-@color4: @lightBackgroundColor; // Maximized header background; appears 1 time
-@color5: @separatorColor; // Color of dashed border while dragging; appears 1 time
+@color0: var(--background-color); // Panel background; appears 3 times
+@color1: var(--shadow-color); // Shadow color; appears 4 times
+@color2: var(--border-color); // Panel border color; appears 3 times
+@color3: var(--text-color-normal); // Active tab text color; appears 2 times
+@color4: var(--text-color-softer); // Maximized header background; appears 1 time
+@color5: var(--border-color); // Color of dashed border while dragging; appears 1 time
 @color6: #452500; // Not sure exactly what this does; appears 1 time
-@color7: @disabledColor; // Inactive tab background color; appears 1 time
-@color8: @darkBackgroundColor; // Splitter color (opacity is set VERY low); appears 1 time
-@color9: @darkBackgroundColor; // Hovered splitter color; appears 1 time
-@color10: @lightTextColor; // Inactive tab text color; appears 1 time
+@color7: var(--background-color-softer); // Inactive tab background color; appears 1 time
+@color8: var(--background-color-richer); // Splitter color (opacity is set VERY low); appears 1 time
+@color9: var(--background-color-richer); // Hovered splitter color; appears 1 time
+@color10: var(--text-color-softer); // Inactive tab text c olor; appears 1 time
 @color11: transparent; // Page background; appears 1 time
 
 // Images
@@ -38,13 +36,13 @@
   // Single Pane content during Drag (style of moving window following mouse)
   .lm_dragProxy {
     .lm_content {
-      box-shadow: 2px 2px 4px fade(@color1,20%);
+      box-shadow: 2px 2px 4px rgba(@color1, 0.2);
     }
   }
 
   // Placeholder Container of target position
   .lm_dropTargetIndicator {
-    box-shadow: inset 0 0 30px fade(@color1,40%);
+    box-shadow: inset 0 0 30px rgba(@color1,40%);
     outline: 1px dashed @color2;
 
     // Inner Placeholder
@@ -105,7 +103,7 @@
       // If Tab is active, so if it's in foreground
       &.lm_active {
         border-bottom: none;
-        box-shadow: 2px -2px 2px -2px fade(@color1,20%);
+        box-shadow: 2px -2px 2px -2px rgba(@color1, 0.2);
         padding-bottom: 5px;
 
         .lm_close_tab {
@@ -120,7 +118,7 @@
     &.lm_right {
       .lm_header .lm_tab {
         &.lm_active {
-          box-shadow: 2px -2px 2px -2px fade(@color1,20%);
+          box-shadow: 2px -2px 2px -2px rgba(@color1, 0.2);
         }
       }
     }
@@ -128,7 +126,7 @@
     &.lm_bottom {
       .lm_header .lm_tab {
         &.lm_active {
-          box-shadow: 2px 2px 2px -2px fade(@color1,20%);
+          box-shadow: 2px 2px 2px -2px rgba(@color1, 0.2);
         }
       }
     }
@@ -201,7 +199,7 @@
     > .lm_items {
       border-color: @color9;
       border-image: linear-gradient(to right, @color9 1%, @color4 100%);
-      box-shadow: 2px 2px 2px -2px fade(@color1,20%);
+      box-shadow: 2px 2px 2px -2px rgba(@color1, 0.2);
     }
   }
 

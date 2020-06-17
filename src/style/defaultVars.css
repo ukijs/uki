@@ -1,0 +1,81 @@
+:root {
+
+	/* default theme: light background, dark text, blue accent */
+	--theme-hue: 0;					/* white */
+	--accent-hue: 194;			/* blue */
+
+	--text-color-richer: hsl(var(--theme-hue), 0%, 5%);			/* #0d0d0d		*/
+
+	--text-color-normal: hsl(var(--theme-hue), 0%, 13%);		/* #222222 		text color; button:hover:active color */
+	--text-color-softer: hsl(var(--theme-hue), 0%, 33%);		/* #555555 		button color; button:hover border */
+
+  --accent-color: hsl(var(--accent-hue), 86%, 57%);				/* #33C3F0 		link; button-primary bg+border; textarea,select:focus border */
+  --accent-color-hover: hsl(var(--accent-hue), 76%, 49%);	/* #1EAEDB 		link hover; button-primary:hover:active bg+border */
+  --accent-color-disabled: hsl(var(--accent-hue), 90%, 80%);
+
+	--button-color: var(--text-color-softer);								/* button color */
+  --button-color-softer: hsl(var(--theme-hue), 0%, 75%);  /* disabled button color */
+	--button-color-hover: var(--text-color-normal);					/* button:hover:focus color */
+
+	--button-background: transparent;												/* button, input[type="submit" | "reset" | "button"] */
+	--button-background-hover: transparent;									/* button:hover, input[type="submit" | "reset" | "button"]:hover */
+
+  --border-color-richer: hsl(var(--theme-hue), 0%, 57%);	/* #888888		button:hover border */
+  --border-color: hsl(var(--theme-hue), 0%, 73%);					/* #bbbbbb		button border */
+	--border-color-softer: hsl(var(--theme-hue), 0%, 82%);	/* #d1d1d1		textarea,select,code,td,hr border	 */
+
+	--background-color: white;														/* transparent body background; textarea,select background */
+	--background-color-softer: hsl(var(--theme-hue), 0%, 95%);
+  --background-color-richer: hsl(var(--theme-hue), 0%, 95%);			/* #f1f1f1 		code background*/
+
+  --shadow-color: black;
+
+	--button-primary-color: white;
+
+
+  /* Note: Skeleton was based off a 10px font sizing for REM  */
+	/* 62.5% of typical 16px browser default = 10px */
+	--base-font-size: 62.5%;
+
+	/* Grid Defaults - default to match orig skeleton settings */
+	--grid-max-width: 960px;
+}
+
+/*  Dark Theme
+	Note: prefers-color-scheme selector support is still limited, but
+	included for future and an example of defining a different base 'theme'
+*/
+@media screen and (prefers-color-scheme: dark) {
+	:root {
+		/* dark theme: light background, dark text, blue accent */
+		--theme-hue: 0;					/* black */
+		--accent-hue: 194;			/* blue */
+
+		--text-color-richer: hsl(var(--theme-hue), 0%, 95%);		/* #f2f2f2 */
+		--text-color-normal: hsl(var(--theme-hue), 0%, 80%);		/* #cccccc text color; button:hover:active color */
+		--text-color-softer: hsl(var(--theme-hue), 0%, 67%);		/* #ababab button color; button:hover border */
+
+		--accent-color: hsl(var(--accent-hue), 76%, 49%);				/* link; button-primary bg+border; textarea,select:focus border */
+		--accent-color-hover: hsl(var(--accent-hue), 86%, 57%);	/* link hover; button-primary:hover:active bg+border */
+		--accent-color-disabled: hsl(var(--accent-hue), 90%, 80%);
+
+		--button-color: var(--text-color-softer);								/* button color */
+    --button-color-softer: hsl(var(--theme-hue), 0%, 35%);  /* disabled button text color */
+		--button-color-hover: var(--text-color-normal);					/* button:hover:focus color */
+
+		--button-background: transparent;												/* button, input[type="submit" | "reset" | "button"] */
+		--button-background-hover: transparent;									/* button:hover, input[type="submit" | "reset" | "button"]:hover */
+
+		--border-color-richer: hsl(var(--theme-hue), 0%, 67%);	/* #ababab		button:hover border */
+		--border-color: hsl(var(--theme-hue), 0%, 27%);					/* button border */
+		--border-color-softer: hsl(var(--theme-hue), 0%, 20%);	/* textarea,select,code,td,hr border	 */
+
+		--background-color: hsl(var(--theme-hue), 0%, 12%);			/* body background; textarea,select background */
+		--background-color-softer: hsl(var(--theme-hue), 0%, 18%);
+		--background-color-richer: hsl(var(--theme-hue), 0%, 5%);				/* code background*/
+
+    --shadow-color: black;
+
+		--button-primary-color: white;
+  }
+}

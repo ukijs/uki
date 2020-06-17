@@ -20,16 +20,17 @@
   },
   "homepage": "https://github.com/alex-r-bigelow/uki#readme",
   "devDependencies": {
-    "rollup": "^2.11.2",
+    "normalize.css": "^8.0.1",
+    "rollup": "^2.16.1",
     "rollup-plugin-less": "^1.1.2",
     "rollup-plugin-string": "^3.0.0",
-    "serve": "^11.3.1"
+    "serve": "^11.3.2"
   },
   "peerDependencies": {
     "d3": "^5.16.0"
   },
   "optionalDependencies": {
     "golden-layout": "^1.5.9",
-    "less": "^3.11.1"
+    "less": "^3.11.3"
   }
 }
