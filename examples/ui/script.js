@@ -58,7 +58,9 @@ class ModalLauncherView extends goldenlayout.GLView {
       primary
     });
     const modalResult = container.append('div')
-      .style('margin-top', '1em');
+      .style('position', 'absolute')
+      .style('font-size', '0.5em')
+      .style('margin-top', '-1em');
     const showModalFunc = () => {
       const buttons = window.modal.defaultButtons;
       buttons[1].onclick = function () {
@@ -83,6 +85,17 @@ class ModalLauncherView extends goldenlayout.GLView {
     };
     button.on('click', showModalFunc);
     button.d3el.on('mouseenter', function () {
+      const generateRandomEntries = length => {
+        return Array.from({ length }, () => {
+          const childLength = Math.floor(Math.random() * length / 2);
+          const result = { content: childLength };
+          if (childLength > 0) {
+            result.subEntries = generateRandomEntries(childLength);
+          }
+          return result;
+        });
+      };
+
       window.tooltip.showContextMenu({
         targetBounds: this.getBoundingClientRect(),
         menuEntries: [
@@ -97,16 +110,8 @@ class ModalLauncherView extends goldenlayout.GLView {
             { content: 'disabled: ' + disabled.toString() }
           ] },
           { content: null },
-          { content: 'Deep',
-            subEntries: [{ content: 'Nested',
-              subEntries: [{ content: 'Menu',
-                subEntries: [{ content: 'Example' }]
-              }] },
-              { content: 'Nested',
-                subEntries: [{ content: 'Menu',
-                  subEntries: [{ content: 'Example' }]
-                }] }]
-          }
+          { content: 'Random Submenu Test',
+            subEntries: generateRandomEntries(100) }
         ]
       });
     });

@@ -158,10 +158,28 @@ const { TooltipView, TooltipViewMixin } = createMixinAndDefault({
           tooltip.style('left', left + 'px')
             .style('top', top + 'px');
 
+          // Clear any old enter/leave listeners that might be leftover if the
+          // tooltip is being reused
+          tooltip
+            .on('mouseleave.tooltip', null)
+            .on('mouseenter.tooltip', null);
           if (hideAfterMs > 0) {
-            this._tooltipTimeout = window.setTimeout(() => {
-              this.hide();
-            }, hideAfterMs);
+            if (interactive) {
+              // Only start the timer if the user's mouse moves outside of the
+              // tooltip, and cancel it if it moves back in
+              tooltip.on('mouseleave.tooltip', () => {
+                this._tooltipTimeout = window.setTimeout(() => {
+                  this.hide();
+                }, hideAfterMs);
+              }).on('mouseenter.tooltip', () => {
+                window.clearTimeout(this._tooltipTimeout);
+              });
+            } else {
+              // Start the timer immediately
+              this._tooltipTimeout = window.setTimeout(() => {
+                this.hide();
+              }, hideAfterMs);
+            }
           }
         }
       }
@@ -190,12 +208,12 @@ const { TooltipView, TooltipViewMixin } = createMixinAndDefault({
          * This should be false for most use cases; it's used internally for nested
          * context menus
          */
-      async showContextMenu ({ menuEntries, targetBounds, anchor, nestNew = 0 } = {}) {
+      async showContextMenu ({ menuEntries, targetBounds, anchor, hideAfterMs, nestNew = 0 } = {}) {
         const self = this;
         await this.show({
           targetBounds,
-          anchor,
-          hideAfterMs: 0,
+          anchor: anchor || { x: 1, y: 0 },
+          hideAfterMs: hideAfterMs || 0,
           interactive: true,
           nestNew,
           content: async d3el => {
@@ -210,14 +228,14 @@ const { TooltipView, TooltipViewMixin } = createMixinAndDefault({
             const butTemp = [];
             menuItems.each(function (d) {
               let item;
-              if (!d.content) {
+              if (d.content === undefined || d.content === null) {
                 item = d3.select(this);
                 item.append('hr');
               } else if (typeof d.content === 'function') {
                 item = d3.select(this);
                 contentFuncPromises.push(d.content(item));
               } else {
-                const ukiProps = typeof d.content === 'object' ? d.content : { label: d.content };
+                const ukiProps = typeof d.content === 'object' ? d.content : { label: d.content, borderless: true };
                 Object.assign(ukiProps, { d3el: d3.select(this) });
                 item = new Button(ukiProps);
                 butTemp.push(item);

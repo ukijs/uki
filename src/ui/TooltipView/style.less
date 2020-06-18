@@ -1,32 +1,35 @@
-@import '../defaultLessVars.less';
-
 .tooltip {
   position: fixed;
   z-index: 1001;
   padding: 0.5em;
   border-radius: 0.5em;
-  background: @textColor;
-  color: @invertedTextColor;
+  background: var(--background-color);
+  color: var(--text-color-normal);
   // border: 1px solid @shadowColor;
-  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.75);
   pointer-events: none;
-  max-height: 250px;
+  max-height: 50%;
   overflow-y: auto;
+  overflow-x: hidden;
+
+  hr {
+    margin: 0;
+  }
 
   &.interactive {
     pointer-events: all;
   }
 
   .menuItem {
+    display: block;
     margin: 0.5em 0;
     &.submenu {
       margin-right: 1em;
       &:after {
         content: '\25b6';
-        color: @invertedTextColor;
+        color: var(--text-color-softer);
         position: absolute;
         right: -1em;
-        top: 0.75em;
       }
     }
   }

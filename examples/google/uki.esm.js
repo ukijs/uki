@@ -650,7 +650,7 @@ const { RecolorableImageView, RecolorableImageViewMixin } = createMixinAndDefaul
   }
 });
 
-var defaultStyle = ".UkiButton.button {\n  position: relative;\n}\n.UkiButton.button img {\n  display: inline-block;\n  position: relative;\n  top: 0.5rem;\n  width: 2.5rem;\n  height: 2.5rem;\n  left: -1rem;\n  filter: url(#recolorImageTo--button-color);\n}\n.UkiButton.button.imgOnly {\n  padding: 0;\n}\n.UkiButton.button.imgOnly img {\n  left: 0;\n  padding: 0 0.5rem;\n}\n.UkiButton.button .label {\n  display: inline-block;\n  white-space: nowrap;\n  vertical-align: top;\n}\n.UkiButton.button .badge {\n  position: absolute;\n  font-weight: bolder;\n  right: -1rem;\n  top: -1rem;\n  height: 2rem;\n  line-height: 2rem;\n  border-radius: 4px;\n  text-align: right;\n  background-color: var(--accent-color);\n  color: var(--button-primary-color);\n  padding: 0 0.5rem 0 0.6rem;\n  z-index: 1;\n  border: 1px solid var(--background-color);\n}\n.UkiButton.button:active img,\n.UkiButton.button:hover img {\n  filter: url(#recolorImageTo--text-color-normal);\n}\n.UkiButton.button.button-primary img {\n  filter: url(#recolorImageTo--button-primary-color);\n}\n.UkiButton.button:disabled img,\n.UkiButton.button.button-disabled img {\n  filter: url(#recolorImageTo--button-color-softer);\n}\n.UkiButton.button:disabled .badge,\n.UkiButton.button.button-disabled .badge {\n  color: var(--background-color);\n  background-color: var(--button-color-softer);\n}\n.UkiButton.button:disabled.button-primary img,\n.UkiButton.button.button-disabled.button-primary img {\n  filter: url(#recolorImageTo--background-color);\n}\n.UkiButton.button:disabled.button-primary .badge,\n.UkiButton.button.button-disabled.button-primary .badge {\n  color: var(--background-color);\n  background-color: var(--button-color-softer);\n}\n";
+var defaultStyle = ".UkiButton.button {\n  position: relative;\n}\n.UkiButton.button.button-borderless {\n  border-color: transparent;\n}\n.UkiButton.button img {\n  display: inline-block;\n  position: relative;\n  top: 0.5rem;\n  width: 2.5rem;\n  height: 2.5rem;\n  left: -1rem;\n  filter: url(#recolorImageTo--button-color);\n}\n.UkiButton.button.imgOnly {\n  padding: 0;\n}\n.UkiButton.button.imgOnly img {\n  left: 0;\n  padding: 0 0.5rem;\n}\n.UkiButton.button .label {\n  display: inline-block;\n  white-space: nowrap;\n  vertical-align: top;\n}\n.UkiButton.button .badge {\n  position: absolute;\n  font-weight: bolder;\n  right: -1rem;\n  top: -1rem;\n  height: 2rem;\n  line-height: 2rem;\n  border-radius: 4px;\n  text-align: right;\n  background-color: var(--accent-color);\n  color: var(--button-primary-color);\n  padding: 0 0.5rem 0 0.6rem;\n  z-index: 1;\n  border: 1px solid var(--background-color);\n}\n.UkiButton.button:active img,\n.UkiButton.button:hover img {\n  filter: url(#recolorImageTo--text-color-normal);\n}\n.UkiButton.button.button-primary img {\n  filter: url(#recolorImageTo--button-primary-color);\n}\n.UkiButton.button:disabled img,\n.UkiButton.button.button-disabled img {\n  filter: url(#recolorImageTo--button-color-softer);\n}\n.UkiButton.button:disabled .badge,\n.UkiButton.button.button-disabled .badge {\n  color: var(--background-color);\n  background-color: var(--button-color-softer);\n}\n.UkiButton.button:disabled.button-primary img,\n.UkiButton.button.button-disabled.button-primary img {\n  filter: url(#recolorImageTo--background-color);\n}\n.UkiButton.button:disabled.button-primary .badge,\n.UkiButton.button.button-disabled.button-primary .badge {\n  color: var(--background-color);\n  background-color: var(--button-color-softer);\n}\n";
 
 const { Button, ButtonMixin } = createMixinAndDefault({
   DefaultSuperClass: View,
@@ -667,6 +667,7 @@ const { Button, ButtonMixin } = createMixinAndDefault({
         this._disabled = options.disabled || false;
         this._primary = options.primary || false;
         this._badge = options.badge;
+        this._borderless = options.borderless || false;
       }
       set size (value) {
         this._size = value;
@@ -703,6 +704,13 @@ const { Button, ButtonMixin } = createMixinAndDefault({
       get primary () {
         return this._primary;
       }
+      set borderless (value) {
+        this._borderless = value;
+        this.render();
+      }
+      get borderless () {
+        return this._borderless;
+      }
       set badge (value) {
         this._badge = value;
         this.render();
@@ -732,9 +740,10 @@ const { Button, ButtonMixin } = createMixinAndDefault({
         super.draw(...arguments);
 
         this.d3el
-          .classed('small', this.size === 'small')
+          .classed('large', this.size === 'large')
           .classed('button-primary', this.primary)
           .classed('button-disabled', this.disabled)
+          .classed('button-borderless', this.borderless)
           .classed('hasImg', this.img)
           .classed('imgOnly', this.img && this.label === undefined);
 
@@ -755,7 +764,7 @@ const { Button, ButtonMixin } = createMixinAndDefault({
   }
 });
 
-var defaultStyle$1 = "/*\nCurrent color scheme\n\nUsing ColorBrewer schemes:\nhttp://colorbrewer2.org/#type=qualitative&scheme=Dark2&n=8\nhttp://colorbrewer2.org/#type=qualitative&scheme=Pastel2&n=8\n*/\n/*\nColor meanings:\n*/\n/*\nDummy class that exposes colors for assignment to classes in Javascript:\n*/\n.classColorList {\n  filter: url(#recolorImageTo1B9E77);\n  filter: url(#recolorImageToD95F02);\n  filter: url(#recolorImageTo7570B3);\n  filter: url(#recolorImageToE7298A);\n  filter: url(#recolorImageTo66A61E);\n  filter: url(#recolorImageToE6AB02);\n  filter: url(#recolorImageToA6761D);\n  filter: url(#recolorImageToB3E2CD);\n  filter: url(#recolorImageToFDCDAC);\n  filter: url(#recolorImageToCBD5E8);\n  filter: url(#recolorImageToF4CAE4);\n  filter: url(#recolorImageToE6F5C9);\n  filter: url(#recolorImageToFFF2AE);\n  filter: url(#recolorImageToF1E2CC);\n}\n/*\nGradients:\n*/\n.tooltip {\n  position: fixed;\n  z-index: 1001;\n  padding: 0.5em;\n  border-radius: 0.5em;\n  background: #252525;\n  color: #F7F7F7;\n  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);\n  pointer-events: none;\n  max-height: 250px;\n  overflow-y: auto;\n}\n.tooltip.interactive {\n  pointer-events: all;\n}\n.tooltip .menuItem {\n  margin: 0.5em 0;\n}\n.tooltip .menuItem.submenu {\n  margin-right: 1em;\n}\n.tooltip .menuItem.submenu:after {\n  content: '\\25b6';\n  color: #F7F7F7;\n  position: absolute;\n  right: -1em;\n  top: 0.75em;\n}\n";
+var defaultStyle$1 = ".tooltip {\n  position: fixed;\n  z-index: 1001;\n  padding: 0.5em;\n  border-radius: 0.5em;\n  background: var(--background-color);\n  color: var(--text-color-normal);\n  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.75);\n  pointer-events: none;\n  max-height: 50%;\n  overflow-y: auto;\n  overflow-x: hidden;\n}\n.tooltip hr {\n  margin: 0;\n}\n.tooltip.interactive {\n  pointer-events: all;\n}\n.tooltip .menuItem {\n  display: block;\n  margin: 0.5em 0;\n}\n.tooltip .menuItem.submenu {\n  margin-right: 1em;\n}\n.tooltip .menuItem.submenu:after {\n  content: '\\25b6';\n  color: var(--text-color-softer);\n  position: absolute;\n  right: -1em;\n}\n";
 
 /* globals d3 */
 
@@ -912,10 +921,28 @@ const { TooltipView, TooltipViewMixin } = createMixinAndDefault({
           tooltip.style('left', left + 'px')
             .style('top', top + 'px');
 
+          // Clear any old enter/leave listeners that might be leftover if the
+          // tooltip is being reused
+          tooltip
+            .on('mouseleave.tooltip', null)
+            .on('mouseenter.tooltip', null);
           if (hideAfterMs > 0) {
-            this._tooltipTimeout = window.setTimeout(() => {
-              this.hide();
-            }, hideAfterMs);
+            if (interactive) {
+              // Only start the timer if the user's mouse moves outside of the
+              // tooltip, and cancel it if it moves back in
+              tooltip.on('mouseleave.tooltip', () => {
+                this._tooltipTimeout = window.setTimeout(() => {
+                  this.hide();
+                }, hideAfterMs);
+              }).on('mouseenter.tooltip', () => {
+                window.clearTimeout(this._tooltipTimeout);
+              });
+            } else {
+              // Start the timer immediately
+              this._tooltipTimeout = window.setTimeout(() => {
+                this.hide();
+              }, hideAfterMs);
+            }
           }
         }
       }
@@ -944,12 +971,12 @@ const { TooltipView, TooltipViewMixin } = createMixinAndDefault({
          * This should be false for most use cases; it's used internally for nested
          * context menus
          */
-      async showContextMenu ({ menuEntries, targetBounds, anchor, nestNew = 0 } = {}) {
+      async showContextMenu ({ menuEntries, targetBounds, anchor, hideAfterMs, nestNew = 0 } = {}) {
         const self = this;
         await this.show({
           targetBounds,
-          anchor,
-          hideAfterMs: 0,
+          anchor: anchor || { x: 1, y: 0 },
+          hideAfterMs: hideAfterMs || 0,
           interactive: true,
           nestNew,
           content: async d3el => {
@@ -963,14 +990,14 @@ const { TooltipView, TooltipViewMixin } = createMixinAndDefault({
             const contentFuncPromises = [];
             menuItems.each(function (d) {
               let item;
-              if (!d.content) {
+              if (d.content === undefined || d.content === null) {
                 item = d3.select(this);
                 item.append('hr');
               } else if (typeof d.content === 'function') {
                 item = d3.select(this);
                 contentFuncPromises.push(d.content(item));
               } else {
-                const ukiProps = typeof d.content === 'object' ? d.content : { label: d.content };
+                const ukiProps = typeof d.content === 'object' ? d.content : { label: d.content, borderless: true };
                 Object.assign(ukiProps, { d3el: d3.select(this) });
                 item = new Button(ukiProps);
                 contentFuncPromises.push(item.render());

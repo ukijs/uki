@@ -19,6 +19,7 @@ const { Button, ButtonMixin } = createMixinAndDefault({
         this._disabled = options.disabled || false;
         this._primary = options.primary || false;
         this._badge = options.badge;
+        this._borderless = options.borderless || false;
       }
       set size (value) {
         this._size = value;
@@ -55,6 +56,13 @@ const { Button, ButtonMixin } = createMixinAndDefault({
       get primary () {
         return this._primary;
       }
+      set borderless (value) {
+        this._borderless = value;
+        this.render();
+      }
+      get borderless () {
+        return this._borderless;
+      }
       set badge (value) {
         this._badge = value;
         this.render();
@@ -84,9 +92,10 @@ const { Button, ButtonMixin } = createMixinAndDefault({
         super.draw(...arguments);
 
         this.d3el
-          .classed('small', this.size === 'small')
+          .classed('large', this.size === 'large')
           .classed('button-primary', this.primary)
           .classed('button-disabled', this.disabled)
+          .classed('button-borderless', this.borderless)
           .classed('hasImg', this.img)
           .classed('imgOnly', this.img && this.label === undefined);
 
