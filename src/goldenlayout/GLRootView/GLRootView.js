@@ -2,14 +2,15 @@
 import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
 import View from '../../View.js';
 import { ThemeableMixin } from '../../style/ThemeableMixin/ThemeableMixin.js';
+import { RecolorableImageViewMixin } from '../../style/RecolorableImageView/RecolorableImageView.js';
 import defaultStyle from './style.less';
 
 const { GLRootView, GLRootViewMixin } = createMixinAndDefault({
   DefaultSuperClass: View,
   classDefFunc: SuperClass => {
-    class GLRootView extends ThemeableMixin({
+    class GLRootView extends RecolorableImageViewMixin(ThemeableMixin({
       SuperClass, defaultStyle, className: 'GLRootView'
-    }) {
+    })) {
       constructor (options) {
         options.resources = options.resources || [];
 
@@ -42,17 +43,20 @@ const { GLRootView, GLRootViewMixin } = createMixinAndDefault({
             loadAfter: ['jQuery']
           });
         }
-        options.suppressInitialRender = true;
         super(options);
 
         this.glSettings = options.glSettings;
         this.viewClassLookup = options.viewClassLookup;
-        this.ready.then(() => {
-          this.setupLayout();
-          this.render();
-        });
       }
       setupLayout () {
+        // Add some default settings if they're not already set
+        this.glSettings.dimensions = this.glSettings.dimensions || {};
+        this.glSettings.dimensions.headerHeight =
+          this.glSettings.dimensions.headerHeight ||
+          parseInt(this.d3el.style('--form-element-height'));
+
+        // Create the GoldenLayout instance and infrastructure for creating /
+        // referencing views
         this.goldenLayout = new GoldenLayout(this.glSettings, this.d3el.node());
         this.views = {};
         for (const [className, ViewClass] of Object.entries(this.viewClassLookup)) {
@@ -69,12 +73,12 @@ const { GLRootView, GLRootViewMixin } = createMixinAndDefault({
           this.goldenLayout.updateSize();
           this.render();
         });
+        this.goldenLayout.init();
       }
       setup () {
         super.setup(...arguments);
-        // Don't do init() until setup() because GoldenLayout sometimes misbehaves
-        // if LESS hasn't finished loading
-        this.goldenLayout.init();
+
+        this.setupLayout();
         this.renderAllViews();
       }
       draw () {

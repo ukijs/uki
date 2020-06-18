@@ -3,14 +3,15 @@ import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
 import { IFrameViewMixin } from '../../ui/IFrameView/IFrameView.js';
 import { GLView } from '../GLView/GLView.js';
 import { ThemeableMixin } from '../../style/ThemeableMixin/ThemeableMixin.js';
+import { RecolorableImageViewMixin } from '../../style/RecolorableImageView/RecolorableImageView.js';
 import defaultStyle from './style.less';
 
 const { IFrameGLView, IFrameGLViewMixin } = createMixinAndDefault({
   DefaultSuperClass: GLView,
   classDefFunc: SuperClass => {
-    class IFrameGLView extends IFrameViewMixin(ThemeableMixin({
+    class IFrameGLView extends RecolorableImageViewMixin(IFrameViewMixin(ThemeableMixin({
       SuperClass, defaultStyle, className: 'IFrameGLView', cnNotOnD3el: true
-    })) {
+    }))) {
       setupD3El () {
         return this.glEl.append('iframe');
       }
@@ -18,7 +19,7 @@ const { IFrameGLView, IFrameGLViewMixin } = createMixinAndDefault({
         super.setupTab();
         this.glTabEl
           .classed('IFrameGLTab', true)
-          .append('div')
+          .insert('div', '.lm_title + *')
           .classed('linkIcon', true)
           .attr('title', 'Open in new tab')
           .on('mousedown', () => {

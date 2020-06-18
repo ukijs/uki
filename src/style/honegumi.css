@@ -112,13 +112,13 @@ input[type="submit"],
 input[type="reset"],
 input[type="button"] {
   display: inline-block;
-  height: 38px;
+  height: var(--form-element-height);
   padding: 0 30px;
   color: var(--button-color);
   text-align: center;
   font-size: 11px;
   font-weight: 600;
-  line-height: 38px;
+  line-height: var(--form-element-height);
   letter-spacing: .1rem;
   text-transform: uppercase;
   text-decoration: none;
@@ -196,7 +196,7 @@ input[type="url"],
 input[type="password"],
 textarea,
 select {
-  height: 38px;
+  height: var(--form-element-height);
   padding: 6px 10px; /* The 6px vertically centers text on FF, ignored by Webkit */
   background-color: var(--background-color);
   border: 1px solid var(--border-color-softer);

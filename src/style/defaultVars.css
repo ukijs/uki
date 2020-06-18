@@ -39,6 +39,9 @@
 
 	/* Grid Defaults - default to match orig skeleton settings */
 	--grid-max-width: 960px;
+
+  /* Button and input field height */
+  --form-element-height: 38px;
 }
 
 /*  Dark Theme

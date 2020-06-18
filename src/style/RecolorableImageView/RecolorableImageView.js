@@ -56,9 +56,9 @@ const { RecolorableImageView, RecolorableImageViewMixin } = createMixinAndDefaul
                     if (hexCode && hexCode[1]) {
                       // Convert the hex code to 0-1 rgb
                       this._recolorFilters[hexCode[1]] = {
-                        r: parseInt(hexCode[1].slice(0, 2)) / 255,
-                        g: parseInt(hexCode[1].slice(2, 4)) / 255,
-                        b: parseInt(hexCode[1].slice(4, 6)) / 255
+                        r: parseInt(hexCode[1].slice(0, 2), 16) / 255,
+                        g: parseInt(hexCode[1].slice(2, 4), 16) / 255,
+                        b: parseInt(hexCode[1].slice(4, 6), 16) / 255
                       };
                     }
                   }

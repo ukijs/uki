@@ -67,36 +67,42 @@
 
   // Pane Header (container of Tabs for each pane)
   .lm_header {
-    height: 20px;
+    height: var(--form-element-height) !important;
 
     // Single Tab container. A single Tab is set for each pane, a group of Tabs are contained in ".lm_header"
     .lm_tab {
-      font-family: Arial, sans-serif;
-      font-size: 12px;
+      font-weight: 600;
+      font-size: 11px;
+      height: calc(var(--form-element-height) - 7.2px);
+      letter-spacing: .1rem;
+      text-transform: uppercase;
       color: @color10;
       background: @color7;
-      margin-right: 2px;
-      padding-bottom: 4px;
+      display: flex;
+      align-items: center;
+      margin: 0;
+      padding: 2.4px 1.5rem 0 1.5rem;
       border: 1px solid @color2;
       border-bottom: none;
+      border-radius: 4px 4px 0 0;
 
       .lm_title {
         padding-top: 1px;
+        margin: 0 0.5rem;
       }
 
       // Close Tab Icon
       .lm_close_tab {
-        width: 11px;
-        height: 11px;
-        background-image: @lmCloseBlack;
-        background-position: center center;
-        background-repeat: no-repeat;
-        top: 4px;
-        right: 6px;
-        opacity: 0.4;
-
-        &:hover {
-          opacity: 1;
+        position: relative;
+        top: -0.3rem;
+        margin: 0 -0.5rem 0 0.5rem;
+        &:after {
+          content: '\2a09';
+          color: var(--button-color-softer);
+          font-size: 1.3rem;
+        }
+        &:hover:after {
+          color: var(--text-color-normal);
         }
       }
 
@@ -148,58 +154,39 @@
     }
   }
 
-  // Dropdown arrow for additional tabs when too many to be displayed
-  .lm_header .lm_controls .lm_tabdropdown:before {
-    color: @color1;
-  }
-
   // Pane controls (popout, maximize, minimize, close)
   .lm_controls {
     // All Pane controls shares these
     > li {
       position: relative;
-      background-position: center center;
-      background-repeat: no-repeat;
-      opacity: 0.4;
-      transition: opacity 300ms ease;
+      margin: 0 0.25rem;
+      &.lm_tabdropdown:before,
+      &:after{
+        color: var(--button-color-softer);
+      }
 
-      &:hover {
-        opacity: 1;
+      &.lm_tabdropdown:hover:before,
+      &:hover:after {
+        color: var(--text-color-normal);
       }
     }
 
     // Icon to PopOut Pane, so move it to a different Browser Window
-    .lm_popout {
-      background-image: @lmPopoutBlack;
+    .lm_popout:after {
+      content: '\1f5d7';
     }
 
     // Icon to Maximize Pane, so it will fill the entire GoldenLayout Container
-    .lm_maximise {
-      background-image: @lmMaximiseBlack;
+    .lm_maximise:after {
+      content: '\1f5d6';
     }
 
     // Icon to Close Pane and so remove it from GoldenLayout Container
     .lm_close {
-      background-image: @lmCloseBlack;
-    }
-
-    // Icon to toggle Pane Docking at mouse hover
-    .lm_dock {
-      background-image: @lmDockedBlack;
-      transform:rotate(-45deg);
-      transition:transform 300ms;
-    }
-  }
-
-  .lm_stack.lm_docked {
-    .lm_controls .lm_dock {
-      transform:rotate(0deg);
-    }
-
-    > .lm_items {
-      border-color: @color9;
-      border-image: linear-gradient(to right, @color9 1%, @color4 100%);
-      box-shadow: 2px 2px 2px -2px rgba(@color1, 0.2);
+      margin: 1px 0 0 0.25rem;
+      &:after {
+        content: '\2a09';
+      }
     }
   }
 
@@ -212,8 +199,8 @@
 
     // Pane controls are different in Maximized Mode, especially the old Icon "Maximise" that now has a different meaning, so "Minimize" (even if CSS Class did not change)
     .lm_controls {
-      .lm_maximise {
-        background-image: @lmMinimizeBlack;
+      .lm_maximise:after {
+        content: '\1f5d5';
       }
     }
   }
@@ -222,29 +209,39 @@
     background-color: @color1;
     border: 1px dashed @color5;
   }
+}
 
-  // If a specific Pane is Popped Out, so move it to a different Browser Window, Icon to restore original position is:
-  .lm_popin {
-    cursor: pointer;
+// If a specific Pane is Popped Out, so move it to a different Browser Window, Icon to restore original position is:
+// (note, this has to be outside the GLRootView namespace because the root class name won't make it into the popout)
+.lm_popin {
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  bottom: unset;
+  right: unset; // GoldenLayout's default bottom-right interferes with scrollbars, window resizers, etc
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 0 0 4px 0;
 
-    // Background of Icon
-    .lm_bg {
-      background: @color1;
-      opacity: 0.7;
+  &:after {
+    content: '\25f0';
+    color: var(--button-color);
+    position: relative;
+    top: -3px;
+    right: -3px;
+  }
+  &:hover {
+    border-color: var(--text-color-softer);
+    &:after {
+      color: var(--text-color-normal);
     }
+  }
 
-    // Icon to Restore original position in Golden Layout Container
-    .lm_icon {
-      background-image: @lmPopinBlack;
-      background-position: center center;
-      background-repeat: no-repeat;
-      opacity: 0.7;
-    }
-
-    &:hover {
-      .lm_icon {
-        opacity: 1;
-      }
-    }
+  // We use :after instead of these in this theme...
+  .lm_bg {
+    display: none;
+  }
+  .lm_icon {
+    display: none;
   }
 }

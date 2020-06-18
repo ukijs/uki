@@ -160,32 +160,14 @@ class RootView extends goldenlayout.GLRootView {
       ModalLauncherView
     };
     options.glSettings = {
-      settings: {
-        // GoldenLayout has a (really buggy) feature for popping a view out in a
-        // separate browser window; I usually disable this unless there is a
-        // clear user need
-        showPopoutIcon: false
-      },
       content: [{
-        type: 'row',
+        type: 'stack',
         isCloseable: false,
         content: [
-          {
-            type: 'column',
-            isCloseable: false,
-            content: [
-              { type: 'component', componentName: 'BasicDemoView', componentState: {} },
-              { type: 'component', componentName: 'IFrameView', componentState: {} }
-            ]
-          },
-          {
-            type: 'column',
-            isCloseable: false,
-            content: [
-              { type: 'component', componentName: 'SvgDemoView', componentState: {} },
-              { type: 'component', componentName: 'ModalLauncherView', componentState: {} }
-            ]
-          }
+          { type: 'component', componentName: 'BasicDemoView', componentState: {} },
+          { type: 'component', componentName: 'IFrameView', componentState: {} },
+          { type: 'component', componentName: 'SvgDemoView', componentState: {} },
+          { type: 'component', componentName: 'ModalLauncherView', componentState: {} }
         ]
       }]
     };
