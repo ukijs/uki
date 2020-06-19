@@ -1,16 +1,12 @@
 /* globals d3 */
 import createMixinAndDefault from '../../utils/createMixinAndDefault.js';
 import View from '../../View.js';
-import { ThemeableMixin } from '../../style/ThemeableMixin/ThemeableMixin.js';
-import defaultStyle from './style.less';
 import template from './template.html';
 
 const { BaseTableView, BaseTableViewMixin } = createMixinAndDefault({
   DefaultSuperClass: View,
   classDefFunc: SuperClass => {
-    class BaseTableView extends ThemeableMixin({
-      SuperClass, defaultStyle, className: 'BaseTableView'
-    }) {
+    class BaseTableView extends SuperClass {
       constructor (options) {
         super(options);
         // By default, keep the original order

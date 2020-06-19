@@ -18,13 +18,13 @@ const data = [
   { this: 7, is: 1, a: parseInt('NaN'), test: null, table: undefined }
 ];
 
-class BaseDemoView extends goldenlayout.GLMixin(table.BaseTableView) {
+class BaseDemoView extends goldenlayout.GLViewMixin(table.BaseTableView) {
   getRawRows () {
     return data;
   }
 }
 
-class FlexDemoView extends goldenlayout.GLMixin(table.FlexTableView) {
+class FlexDemoView extends goldenlayout.GLViewMixin(table.FlexTableView) {
   getRawRows () {
     return data;
   }

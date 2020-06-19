@@ -53,12 +53,15 @@ const { FlexTableView, FlexTableViewMixin } = createMixinAndDefault({
           .attr('type', 'checkbox')
           .attr('id', (d, i) => `attrCheckbox${i}`)
           .property('checked', d => this.headerIsVisible(d.index))
+          .style('display', 'inline-block')
+          .style('margin-right', '1em')
           .on('change', d => {
             this.toggleHeader(d);
           });
         listItemsEnter.append('label')
           .attr('for', (d, i) => `attrCheckbox${i}`)
-          .text(d => d.data);
+          .text(d => d.data)
+          .style('display', 'inline-block');
       }
       headerIsVisible (headerIndex) {
         return this.visibleHeaderIndices === null ||
@@ -74,7 +77,7 @@ const { FlexTableView, FlexTableViewMixin } = createMixinAndDefault({
             });
           }
           this.attributeSelector.on('click', () => {
-            this.showTooltip({
+            window.uki.showTooltip({
               content: tooltipEl => { this.drawFlexMenu(tooltipEl); },
               targetBounds: this.attributeSelector.d3el.node().getBoundingClientRect(),
               interactive: true,

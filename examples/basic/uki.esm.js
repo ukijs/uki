@@ -1981,8 +1981,6 @@ var ui = /*#__PURE__*/Object.freeze({
   AnimatedViewMixin: AnimatedViewMixin
 });
 
-var defaultStyle$8 = ".BaseTableView table {\n  border-collapse: collapse;\n  font-size: 10.5pt;\n}\n.BaseTableView th {\n  background-color: #ccc;\n}\n.BaseTableView th,\n.BaseTableView td {\n  border: 1px solid #ccc;\n  text-align: left;\n  vertical-align: bottom;\n  padding: 2px;\n}\n.BaseTableView th > div,\n.BaseTableView td > div {\n  max-height: 4em;\n  max-width: 5em;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n.BaseTableView th {\n  position: sticky;\n  top: -1px;\n}\n";
-
 var template$1 = "<table>\n  <thead>\n    <tr></tr>\n  </thead>\n  <tbody>\n  </tbody>\n</table>\n";
 
 /* globals d3 */
@@ -1990,9 +1988,7 @@ var template$1 = "<table>\n  <thead>\n    <tr></tr>\n  </thead>\n  <tbody>\n  </
 const { BaseTableView, BaseTableViewMixin } = createMixinAndDefault({
   DefaultSuperClass: View,
   classDefFunc: SuperClass => {
-    class BaseTableView extends ThemeableMixin({
-      SuperClass, defaultStyle: defaultStyle$8, className: 'BaseTableView'
-    }) {
+    class BaseTableView extends SuperClass {
       constructor (options) {
         super(options);
         // By default, keep the original order
@@ -2204,12 +2200,15 @@ const { FlexTableView, FlexTableViewMixin } = createMixinAndDefault({
           .attr('type', 'checkbox')
           .attr('id', (d, i) => `attrCheckbox${i}`)
           .property('checked', d => this.headerIsVisible(d.index))
+          .style('display', 'inline-block')
+          .style('margin-right', '1em')
           .on('change', d => {
             this.toggleHeader(d);
           });
         listItemsEnter.append('label')
           .attr('for', (d, i) => `attrCheckbox${i}`)
-          .text(d => d.data);
+          .text(d => d.data)
+          .style('display', 'inline-block');
       }
       headerIsVisible (headerIndex) {
         return this.visibleHeaderIndices === null ||
@@ -2225,7 +2224,7 @@ const { FlexTableView, FlexTableViewMixin } = createMixinAndDefault({
             });
           }
           this.attributeSelector.on('click', () => {
-            this.showTooltip({
+            window.uki.showTooltip({
               content: tooltipEl => { this.drawFlexMenu(tooltipEl); },
               targetBounds: this.attributeSelector.d3el.node().getBoundingClientRect(),
               interactive: true,
