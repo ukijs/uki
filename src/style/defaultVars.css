@@ -5,7 +5,6 @@
 	--accent-hue: 194;			/* blue */
 
 	--text-color-richer: hsl(var(--theme-hue), 0%, 5%);			/* #0d0d0d		*/
-
 	--text-color-normal: hsl(var(--theme-hue), 0%, 13%);		/* #222222 		text color; button:hover:active color */
 	--text-color-softer: hsl(var(--theme-hue), 0%, 33%);		/* #555555 		button color; button:hover border */
 
@@ -13,12 +12,7 @@
   --accent-color-hover: hsl(var(--accent-hue), 76%, 49%);	/* #1EAEDB 		link hover; button-primary:hover:active bg+border */
   --accent-color-disabled: hsl(var(--accent-hue), 90%, 80%);
 
-	--button-color: var(--text-color-softer);								/* button color */
-  --button-color-softer: hsl(var(--theme-hue), 0%, 75%);  /* disabled button color */
-	--button-color-hover: var(--text-color-normal);					/* button:hover:focus color */
-
-	--button-background: transparent;												/* button, input[type="submit" | "reset" | "button"] */
-	--button-background-hover: transparent;									/* button:hover, input[type="submit" | "reset" | "button"]:hover */
+  --disabled-color: hsl(var(--theme-hue), 0%, 75%);  /* disabled button color */
 
   --border-color-richer: hsl(var(--theme-hue), 0%, 57%);	/* #888888		button:hover border */
   --border-color: hsl(var(--theme-hue), 0%, 73%);					/* #bbbbbb		button border */
@@ -29,6 +23,7 @@
   --background-color-richer: hsl(var(--theme-hue), 0%, 95%);			/* #f1f1f1 		code background*/
 
   --shadow-color: black;
+  --shadow-color-rgb: 0, 0, 0;
 
 	--button-primary-color: white;
 
@@ -42,6 +37,8 @@
 
   /* Button and input field height */
   --form-element-height: 38px;
+
+  --corner-radius: 4px;
 }
 
 /*  Dark Theme
@@ -62,12 +59,7 @@
 		--accent-color-hover: hsl(var(--accent-hue), 86%, 57%);	/* link hover; button-primary:hover:active bg+border */
 		--accent-color-disabled: hsl(var(--accent-hue), 90%, 80%);
 
-		--button-color: var(--text-color-softer);								/* button color */
-    --button-color-softer: hsl(var(--theme-hue), 0%, 35%);  /* disabled button text color */
-		--button-color-hover: var(--text-color-normal);					/* button:hover:focus color */
-
-		--button-background: transparent;												/* button, input[type="submit" | "reset" | "button"] */
-		--button-background-hover: transparent;									/* button:hover, input[type="submit" | "reset" | "button"]:hover */
+    --disabled-color: hsl(var(--theme-hue), 0%, 35%);  /* disabled button text color */
 
 		--border-color-richer: hsl(var(--theme-hue), 0%, 67%);	/* #ababab		button:hover border */
 		--border-color: hsl(var(--theme-hue), 0%, 27%);					/* button border */
@@ -78,6 +70,7 @@
 		--background-color-richer: hsl(var(--theme-hue), 0%, 5%);				/* code background*/
 
     --shadow-color: black;
+    --shadow-color-rgb: 0, 0, 0;
 
 		--button-primary-color: white;
   }

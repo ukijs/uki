@@ -114,7 +114,7 @@ input[type="button"] {
   display: inline-block;
   height: var(--form-element-height);
   padding: 0 30px;
-  color: var(--button-color);
+  color: var(--text-color-softer);
   text-align: center;
   font-size: 11px;
   font-weight: 600;
@@ -123,8 +123,8 @@ input[type="button"] {
   text-transform: uppercase;
   text-decoration: none;
   white-space: nowrap;
-  background-color: var(--button-background);
-  border-radius: 4px;
+  background-color: transparent;
+  border-radius: var(--corner-radius);
   border: 1px solid var(--border-color);
   cursor: pointer;
   user-select: none;
@@ -170,8 +170,8 @@ button:disabled,
 input[type="submit"]:disabled,
 input[type="reset"]:disabled,
 input[type="button"]:disabled {
-	color: var(--button-color-softer);
-	border-color: var(--button-color-softer);
+	color: var(--disabled-color);
+	border-color: var(--disabled-color);
 	cursor: default; }
 .button.button-primary.button-disabled,
 .button.button-primary:disabled,
@@ -180,8 +180,8 @@ input[type="submit"].button-primary:disabled,
 input[type="reset"].button-primary:disabled,
 input[type="button"].button-primary:disabled {
 	color: var(--background-color);
-	background-color: var(--button-color-softer);
-	border-color: var(--button-color-softer);
+	background-color: var(--disabled-color);
+	border-color: var(--disabled-color);
 	cursor: default; }
 
 
@@ -200,7 +200,7 @@ select {
   padding: 6px 10px; /* The 6px vertically centers text on FF, ignored by Webkit */
   background-color: var(--background-color);
   border: 1px solid var(--border-color-softer);
-  border-radius: 4px;
+  border-radius: var(--corner-radius);
   box-shadow: none;
   box-sizing: border-box; }
 /* Removes awkward default styles on some inputs for iOS */
@@ -276,7 +276,7 @@ code {
   white-space: nowrap;
   background: var(--background-color-richer);
   border: 1px solid var(--border-color-softer);
-  border-radius: 4px; }
+  border-radius: var(--corner-radius); }
 pre > code {
   display: block;
   padding: 1rem 1.5rem;

@@ -11,7 +11,8 @@
 @color10: var(--text-color-softer); // Inactive tab text c olor; appears 1 time
 @color11: transparent; // Page background; appears 1 time
 
-.GLRootView {
+.GLRootView,
+.lm_dragging {
   // ".lm_dragging" is applied to BODY tag during Drag and is also directly applied to the root of the object being dragged
 
   // Entire GoldenLayout Container, if a background is set, it is visible as color of "pane header" and "splitters" (if these latest has opacity very low)
@@ -28,13 +29,13 @@
   // Single Pane content during Drag (style of moving window following mouse)
   .lm_dragProxy {
     .lm_content {
-      box-shadow: 2px 2px 4px rgba(@color1, 0.2);
+      box-shadow: 2px 2px 4px rgba(var(--shadow-color-rgb), 0.2);
     }
   }
 
   // Placeholder Container of target position
   .lm_dropTargetIndicator {
-    box-shadow: inset 0 0 30px rgba(@color1,40%);
+    box-shadow: inset 0 0 30px rgba(var(--shadow-color-rgb), 40%);
     outline: 1px dashed @color2;
 
     // Inner Placeholder
@@ -77,7 +78,7 @@
       padding: 2.4px 1.5rem 4px 1.5rem;
       border: 1px solid @color2;
       border-bottom: none;
-      border-radius: 4px 4px 0 0;
+      border-radius: var(--corner-radius) var(--corner-radius) 0 0;
 
       .lm_title {
         padding-top: 1px;
@@ -91,7 +92,7 @@
           margin-top: 5px;
         }
         margin: 0 0.5rem;
-        filter: url(#recolorImageTo--button-color-softer);
+        filter: url(#recolorImageTo--disabled-color);
 
         &:hover {
           filter: url(#recolorImageTo--text-color-normal);
@@ -105,7 +106,7 @@
         margin: 0 -0.5rem 0 0.5rem;
         &:after {
           content: '\2a09';
-          color: var(--button-color-softer);
+          color: var(--disabled-color);
           font-size: 1.3rem;
         }
         &:hover:after {
@@ -120,8 +121,8 @@
     }
   }
   .lm_tabdropdown_list {
-    border-radius: 4px;
-    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.75);
+    border-radius: var(--corner-radius);
+    box-shadow: 2px 2px 5px rgba(var(--shadow-color-rgb), 0.75);
     .lm_tab {
       border: none;
       border-radius: 0;
@@ -136,7 +137,7 @@
     &.lm_right {
       .lm_header .lm_tab {
         &.lm_active {
-          box-shadow: 2px -2px 2px -2px rgba(@color1, 0.2);
+          box-shadow: 2px -2px 2px -2px rgba(var(--shadow-color-rgb), 0.2);
         }
       }
     }
@@ -144,7 +145,7 @@
     &.lm_bottom {
       .lm_header .lm_tab {
         &.lm_active {
-          box-shadow: 2px 2px 2px -2px rgba(@color1, 0.2);
+          box-shadow: 2px 2px 2px -2px rgba(var(--shadow-color-rgb), 0.2);
         }
       }
     }
@@ -174,7 +175,7 @@
       margin: 0 0.25rem;
       &.lm_tabdropdown:before,
       &:after{
-        color: var(--button-color-softer);
+        color: var(--disabled-color);
       }
 
       &.lm_tabdropdown:hover:before,
@@ -233,11 +234,11 @@
   right: unset; // GoldenLayout's default bottom-right interferes with scrollbars, window resizers, etc
   background: var(--background-color);
   border: 1px solid var(--border-color);
-  border-radius: 0 0 4px 0;
+  border-radius: 0 0 var(--corner-radius) 0;
 
   &:after {
     content: '\25f0';
-    color: var(--button-color);
+    color: var(--text-color-softer);
     position: relative;
     top: -3px;
     right: -3px;

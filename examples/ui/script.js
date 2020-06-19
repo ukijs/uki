@@ -47,10 +47,11 @@ class ModalLauncherView extends goldenlayout.GLView {
   }
   createButton (wrapper, img, label, showBadge, disabled, primary) {
     const container = wrapper.append('div')
-      .style('display', 'inline-block');
+      .style('display', 'inline-block')
+      .style('margin-bottom', '2rem');
     let count = 0;
     const button = new ui.Button({
-      d3el: container.append('div').style('margin-right', '1rem'),
+      d3el: container.append('div').style('margin-right', '2rem'),
       label,
       img,
       badge: showBadge ? 0 : undefined,

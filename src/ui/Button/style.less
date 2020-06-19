@@ -12,7 +12,7 @@
     width: 2.5rem;
     height: 2.5rem;
     left: -1rem;
-    filter: url(#recolorImageTo--button-color);
+    filter: url(#recolorImageTo--text-color-softer);
   }
   &.imgOnly {
     padding: 0;
@@ -34,7 +34,7 @@
     top: -1rem;
     height: 2rem;
     line-height: 2rem;
-    border-radius: 4px;
+    border-radius: var(--corner-radius);
     text-align: right;
     background-color: var(--accent-color);
     color: var(--button-primary-color);
@@ -56,11 +56,11 @@
   &:disabled,
   &.button-disabled {
     img {
-      filter: url(#recolorImageTo--button-color-softer);
+      filter: url(#recolorImageTo--disabled-color);
     }
     .badge {
       color: var(--background-color);
-    	background-color: var(--button-color-softer);
+    	background-color: var(--disabled-color);
     }
     &.button-primary {
       img {
@@ -68,7 +68,7 @@
       }
       .badge {
         color: var(--background-color);
-      	background-color: var(--button-color-softer);
+      	background-color: var(--disabled-color);
       }
     }
   }
