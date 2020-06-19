@@ -15,6 +15,8 @@ const { GLView, GLViewMixin } = createMixinAndDefault({
         super(options);
         this.glContainer = options.glContainer;
         this.state = options.glState;
+        this.icons = options.icons || [];
+        this.initIcons();
         this.isHidden = false;
         this.glContainer.on('tab', tab => {
           this.glTabEl = d3.select(tab.element[0]);
@@ -45,12 +47,39 @@ const { GLView, GLViewMixin } = createMixinAndDefault({
       get title () {
         return this.humanReadableType;
       }
+      initIcons () {
+        for (const icon of this.icons) {
+          if (icon.svg) {
+            // Convert raw SVG to an Image
+            icon.src = window.URL.createObjectURL(
+              new window.Blob([icon.svg],
+                { type: 'image/svg+xml;charset=utf-8' }));
+          }
+        }
+      }
       setupTab () {
-        this.glTabEl.classed(this.type, true);
+        this.glTabEl.classed(this.type + 'Tab', true)
+          .insert('div', '.lm_title + *').classed('icons', true);
       }
       drawTab () {
         this.glTabEl.select(':scope > .lm_title')
           .text(this.title);
+
+        let icons = this.glTabEl.select('.icons')
+          .selectAll('.icon').data(this.icons);
+        icons.exit().remove();
+        const iconsEnter = icons.enter()
+          .append('div').classed('icon', true);
+        icons = icons.merge(iconsEnter);
+
+        iconsEnter.append('img');
+        icons.select('img').attr('src', d => d.src);
+
+        icons.on('mousedown', () => {
+          d3.event.stopPropagation();
+        }).on('mouseup', d => { d.onclick(); });
+
+        this.trigger('tabDrawn');
       }
       setupD3El () {
         // Default setup is a scrollable div; subclasses might override this

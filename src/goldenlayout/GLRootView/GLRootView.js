@@ -67,6 +67,7 @@ const { GLRootView, GLRootViewMixin } = createMixinAndDefault({
               glState: state
             });
             self.views[className] = view;
+            view.on('tabDrawn', () => { self.fixTabs(); });
           });
         }
         window.addEventListener('resize', () => {
@@ -85,10 +86,16 @@ const { GLRootView, GLRootViewMixin } = createMixinAndDefault({
         super.draw(...arguments);
         this.renderAllViews();
       }
-      renderAllViews () {
-        for (const view of Object.values(this.views)) {
-          view.render();
-        }
+      async renderAllViews () {
+        return Promise.all(Object.values(this.views).map(view => view.render()));
+      }
+      fixTabs () {
+        window.clearTimeout(this._fixTabsTimeout);
+        this._fixTabsTimeout = window.setTimeout(() => {
+          // Sometimes tabs add extra stuff, which can invalidate
+          // GoldenLayout's initial calculation of which tabs should be visible
+          this.goldenLayout.updateSize();
+        }, 50);
       }
     }
     return GLRootView;

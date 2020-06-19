@@ -11,14 +11,6 @@
 @color10: var(--text-color-softer); // Inactive tab text c olor; appears 1 time
 @color11: transparent; // Page background; appears 1 time
 
-// Images
-@lmCloseBlack: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAKUlEQVR4nGNgYGD4z4Af/Mdg4FKASwCnDf8JKSBoAtEmEXQTQd8RDCcA6+4Q8OvIgasAAAAASUVORK5CYII=");
-@lmPopoutBlack: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAANUlEQVR4nI2QMQoAMAwCz5L/f9mOzZIaN0E9UDyZhaaQz6atgBHgambEJ5wBKoS0WaIvfT+6K2MIECN19MAAAAAASUVORK5CYII=");
-@lmMaximiseBlack: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAIklEQVR4nGNkYGD4z0AAMBFSAAOETPpPlEmDUREjAxHhBABPvAQLFv3qngAAAABJRU5ErkJggg==");
-@lmDockedBlack: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1MAAA6mAAADqYAAAXb5JfxUYAAAC6SURBVHjavNRRFYIwFAbgLwJRaCBRaCIRbGAEaSARaKANpMF8GedM3BSV4wMvY/u4+++GEIItns8m0/wMoUHA8WsIFS7oMOawtVCPPkGfsFeLa+ywx4RqUeEDVgIuMY8R11zIcZthfpfLYsKQVpCZc1p+oFTRhLbQuVvMrHqbUQmLVXQftT/JoE3GhtKhLCFtRLq5sphNQL0KSpB2sc0zrquuyBLJZFa/hUpI2vZVtx+HErL5b+Qv0H0Axmb86JFNd6MAAAAASUVORK5CYII=");
-@lmMinimizeBlack: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAJklEQVR4nGP8//8/AyHARFDFUFbEwsDAwMDIyIgzHP7//89IlEkApSkHEScJTKoAAAAASUVORK5CYII=");
-@lmPopinBlack: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA0AAAAJCAYAAADpeqZqAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH5AIMBA8Y4uozqQAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUHAAAAQ0lEQVQY072OMQ6AMAzEzhH//7I7oKKKoSULXjI5Z5KokgXAbEANoMq8WwGs3FOcvq/Ul5w311zqSNVdefJ+kUjSzhteChsRI/jXegAAAABJRU5ErkJggg==");
-
 .GLRootView {
   // ".lm_dragging" is applied to BODY tag during Drag and is also directly applied to the root of the object being dragged
 
@@ -80,8 +72,9 @@
       background: @color7;
       display: flex;
       align-items: center;
+      white-space: nowrap;
       margin: 0;
-      padding: 2.4px 1.5rem 0 1.5rem;
+      padding: 2.4px 1.5rem 4px 1.5rem;
       border: 1px solid @color2;
       border-bottom: none;
       border-radius: 4px 4px 0 0;
@@ -89,6 +82,20 @@
       .lm_title {
         padding-top: 1px;
         margin: 0 0.5rem;
+      }
+
+      .icon {
+        img {
+          width: 11px;
+          height: 11px;
+          margin-top: 5px;
+        }
+        margin: 0 0.5rem;
+        filter: url(#recolorImageTo--button-color-softer);
+
+        &:hover {
+          filter: url(#recolorImageTo--text-color-normal);
+        }
       }
 
       // Close Tab Icon
@@ -108,13 +115,18 @@
 
       // If Tab is active, so if it's in foreground
       &.lm_active {
-        border-bottom: none;
-        box-shadow: 2px -2px 2px -2px rgba(@color1, 0.2);
         padding-bottom: 5px;
-
-        .lm_close_tab {
-          opacity: 1;
-        }
+      }
+    }
+  }
+  .lm_tabdropdown_list {
+    border-radius: 4px;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.75);
+    .lm_tab {
+      border: none;
+      border-radius: 0;
+      .icon {
+        display: none;
       }
     }
   }
