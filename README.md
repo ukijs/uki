@@ -1,9 +1,9 @@
-![uki.js](https://github.com/alex-r-bigelow/uki/blob/master/docs/teaser.svg)
+![uki.js](https://github.com/alex-r-bigelow/uki/blob/main/docs/teaser.svg)
 
 A minimal, d3-based Model-View framework.
 
 # What is this?
-Yet another web framework ([why?](#Why_another_framework)), originally designed
+Yet another web framework ([why?](#why-another-framework)), originally designed
 as a fast way to design maintainable, multiple linked visualizations from
 [bl.ocks](https://bl.ocks.org).
 
@@ -131,24 +131,25 @@ class NodeLinkView extends View {
 # Why another framework?
 I rolled this together after lots of frustration with existing MVC frameworks.
 Among these frustrations:
-- Limited vision; frameworks often constrain what a web app can even be
-- Cryptic, non-existent, or duplicate forms of documentation (some of which is
-  out of date)
-- Non-optional philosophies—they have kool-aid, and make you drink it
-- Incompatibility with other frameworks / libraries (e.g. d3.js) that don't
- subscribe to those philosophies
 - Nasty build processes (e.g. webpack) that aren't really needed now that native
   ES6 imports are a thing. "Loading stuff is hard" shouldn't be a reason to
   [make web development suck](https://hackernoon.com/how-it-feels-to-learn-javascript-in-2016-d3a717dd577f).
 - Introducing non-standard syntax that you have to learn beyond what the browser
   already does natively—and in some cases, *re-learning* new variants of
-  existing syntax that are subtly different (React, I'm looking at you)
+  existing syntax that are subtly different (React, I'm looking at you).
+- Non-optional philosophies—they have kool-aid, and make you drink it
+- Incompatibility with other frameworks / libraries (e.g. d3.js) that don't
+  subscribe to those philosophies
+- Cryptic, non-existent, or duplicate forms of documentation (some of which is
+  out of date)
 ... and all this, only to help you do some simple things.
 
-I don't claim this is better than anything else out there. But if any of these
+This isn't necessarily better than anything else out there. But if any of these
 things sound appealing, maybe it's worth trying out:
 
-- No build process required. Use native Javascript + HTML + CSS however you want
+- No build process required. Use native Javascript + HTML + CSS however you
+  want. This also means that new people on your team can contribute
+  meaningfully, and *not even be aware* that parts of the page use a framework
 - Simplifies some of the issues of loading / fetching Javascript and
   non-Javascript resources (e.g. CSV files, API calls, CSS stylesheets, SVG
   templates) in a way that gives you more control over directory structures,
