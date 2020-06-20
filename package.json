@@ -1,6 +1,6 @@
 {
   "name": "uki",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "Minimal, d3-based Model-View library",
   "module": "dist/uki.esm.js",
   "jsnext:main": "dist/uki.esm.js",
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alex-r-bigelow/uki.git"
+    "url": "git+https://github.com/ukijs/uki.git"
   },
   "author": "Alex Bigelow",
   "license": "MIT",
