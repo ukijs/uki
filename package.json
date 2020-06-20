@@ -1,6 +1,6 @@
 {
   "name": "uki",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "Minimal, d3-based Model-View library",
   "module": "dist/uki.esm.js",
   "jsnext:main": "dist/uki.esm.js",

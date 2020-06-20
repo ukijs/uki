@@ -501,5 +501,8 @@ var utils = /*#__PURE__*/Object.freeze({
 });
 
 globalThis.uki = globalThis.uki || {};
+globalThis.uki.Model = Model;
+globalThis.uki.View = View;
+globalThis.uki.utils = utils;
 
 export { Model, View, utils };
