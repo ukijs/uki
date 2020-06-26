@@ -304,6 +304,7 @@ class View extends Model {
     super(options);
     this.d3el = this.checkForEmptySelection(options.d3el || null);
     this.dirty = true;
+    this._pauseRender = false;
     this._drawTimeout = null;
     this._renderResolves = [];
     this.debounceWait = options.debounceWait || 100;
@@ -321,23 +322,35 @@ class View extends Model {
       return d3el;
     }
   }
+  get pauseRender () {
+    return this._pauseRender;
+  }
+  set pauseRender (value) {
+    this._pauseRender = value;
+    if (!this._pauseRender) {
+      // Automatically start another render call if we unpause
+      this.render();
+    }
+  }
   async render (d3el = this.d3el) {
     d3el = this.checkForEmptySelection(d3el);
     if (!this.d3el || (d3el && d3el.node() !== this.d3el.node())) {
       this.d3el = d3el;
       this.dirty = true;
     }
-    if (!this.d3el) {
+
+    await this.ready;
+    if (!this.d3el || this._pauseRender) {
       // Don't execute any render calls until all resources are loaded,
-      // and we've actually been given a d3 element to work with
+      // we've actually been given a d3 element to work with, and we're not
+      // paused
       return new Promise((resolve, reject) => {
         this._renderResolves.push(resolve);
       });
     }
-    await this.ready;
+
     if (this.dirty && this._setupPromise === undefined) {
       // Need a fresh render; call setup immediately
-      this.d3el = d3el;
       this.updateContainerCharacteristics(this.d3el);
       this._setupPromise = this.setup(this.d3el);
       this.dirty = false;
@@ -345,6 +358,7 @@ class View extends Model {
       delete this._setupPromise;
       this.trigger('setupFinished');
     }
+
     // Debounce the actual draw call, and return a promise that will resolve
     // when draw() actually finishes
     return new Promise((resolve, reject) => {
@@ -354,6 +368,11 @@ class View extends Model {
         this._drawTimeout = null;
         if (this._setupPromise) {
           await this._setupPromise;
+        }
+        if (this._pauseRender) {
+          // Do a _pauseRender check immediately before we do a draw call;
+          // resolve for this Promise has already been added to _renderResolves
+          return;
         }
         const result = await this.draw(this.d3el);
         this.trigger('drawFinished');

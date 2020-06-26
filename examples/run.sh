@@ -1,2 +1,2 @@
 set -e
-serve examples/$1
+serve examples/$1 ${@:2}
