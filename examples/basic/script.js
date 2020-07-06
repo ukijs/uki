@@ -1,7 +1,7 @@
 /* globals d3 */
-import { View } from '../uki.esm.js';
+import * as uki from '../uki.esm.js';
 
-class CustomView extends View {
+class CustomView extends uki.View {
   setup () {
     this.d3el.append('p');
   }

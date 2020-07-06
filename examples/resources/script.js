@@ -1,7 +1,7 @@
 /* globals d3, jQuery */
-import { View } from '../uki.esm.js';
+import * as uki from '../uki.esm.js';
 
-class CustomView extends View {
+class CustomView extends uki.View {
   constructor () {
     super({ resources: [
       { // Can load plain text
@@ -74,6 +74,11 @@ class CustomView extends View {
     // this.d3el.html(this.resources[0]), but this example also wants to demo
     // that the jQuery library that we loaded works:
     jQuery(this.d3el.node()).html(this.getNamedResource('template'));
+
+    this.d3el.select('button').on('click', async () => {
+      await this.loadLateResource({ type: 'less', url: 'late.less', name: 'late' });
+      console.log('late resource loaded:', this.getNamedResource('late'));
+    });
   }
   draw () {
     console.log('called draw()', this.resources);

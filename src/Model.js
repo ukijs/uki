@@ -5,6 +5,7 @@ class Model {
     this._eventHandlers = {};
     this._stickyTriggers = {};
     this._resourceSpecs = options.resources || [];
+    this._resourceLookup = {};
     this.ready = new Promise(async (resolve, reject) => {
       await this._loadResources(this._resourceSpecs);
       this.trigger('load');
@@ -155,6 +156,16 @@ class Model {
       await window._ukiLessPromise;
     }
   }
+  async loadLateResource (spec) {
+    await this.ready;
+    if (spec.type === 'less') {
+      await this.ensureLessIsLoaded();
+    }
+    if (spec.name) {
+      this._resourceLookup[spec.name] = this.resources.length;
+    }
+    this.resources.push(await this._getCoreResourcePromise(spec));
+  }
   async _loadResources (specs = []) {
     // uki itself needs d3.js; make sure it exists
     if (!window.d3) {
@@ -167,7 +178,6 @@ class Model {
     }
 
     // First, construct a lookup of named dependencies
-    this._resourceLookup = {};
     specs.forEach((spec, i) => {
       if (spec.name) {
         this._resourceLookup[spec.name] = i;

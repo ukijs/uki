@@ -1,4 +1,5 @@
 import pkg from './package.json';
+import json from '@rollup/plugin-json';
 
 // Derive some of the configuration from package.json
 const peerDependencies = Object.keys(pkg.peerDependencies);
@@ -15,6 +16,7 @@ export default [
       file: pkg.module,
       format: 'es'
     },
-    external: allExternals
+    external: allExternals,
+    plugins: [json()]
   }
 ];

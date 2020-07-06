@@ -20,7 +20,8 @@ there is a parsed result (such as a CSV file), it can be accessed through the
 you can give a string `name` to resources that you can use for
 `getNamedResource()` access that doesn't depend on the order of that list.
 
-Resources are available from a `Model` once its `ready` Promise resolves.
+Resources are available from a `Model` once its `ready` Promise resolves. Also
+note that `View`s will not attempt to render until `ready` resolves.
 
 Each entry in the array should be an `Object` with `type` and `url` properties,
 for example:
@@ -28,10 +29,12 @@ for example:
 ```javascript
 class MyModel extends Model {
   constructor() {
-    super({ resources: [
-      { type: 'csv', url: 'myData.csv' },
-      { type: 'json', url: 'myConfiguration.json' }
-    ] });
+    super({
+      resources: [
+        { type: 'csv', url: 'myData.csv' },
+        { type: 'json', url: 'myConfiguration.json' }
+      ]
+    });
   }
 }
 
@@ -45,8 +48,10 @@ class MyModel extends Model {
 ```
 
 ## Controlling resource load order
-There are two options that you can add to a resource for more control over the
-timing of loading resources.
+By default, all resources loaded in the constructor will be done asychronously,
+with parallel requests. There are two options (`loadAfter` and `then`) and a
+function (`loadLateResource`) that you can use for more fine-grained control
+over the timing of loading resources.
 
 ### `loadAfter`
 This option lets you tell `uki` not to load one resource until a list of other
@@ -55,49 +60,54 @@ named resources has finished loading:
 ```javascript
 class MyModel extends Model {
   constructor() {
-    super({ resources: [
-      { type: 'json', url: 'myConfiguration.json', name: 'config' },
-      { type: 'csv', url: 'myData.csv', name: 'myData' },
-      { type: 'js', url: 'someOtherScript.js', loadAfter: ['config', 'myData'] }
-    ] });
+    super({
+      resources: [
+        { type: 'json', url: 'myConfiguration.json', name: 'config' },
+        { type: 'csv', url: 'myData.csv', name: 'myData' },
+        { type: 'js', url: 'someOtherScript.js', loadAfter: ['config', 'myData'] }
+      ]
+    });
   }
 }
 ```
 
 ### `then`
-This function lets you add additional processing after a resource's internal
+This option lets you add additional processing after a resource's internal
 Promise resolves:
 
 ```javascript
 class MyModel extends Model {
   constructor() {
-    super({ resources: [
-      {
-        type: 'json',
-        url: 'myConfiguration.json',
-        name: 'config',
-        storeOriginalResult: true,
-        then: () => {
-          console.log('config loaded');
-          // Note that there is no return statement!
+    super({
+      resources: [
+        {
+          type: 'json',
+          url: 'myConfiguration.json',
+          name: 'config',
+          storeOriginalResult: true,
+          then: () => {
+            console.log('config loaded');
+            // Note that a return statement would be ignored, because
+            // storeOriginalResult is set to true
+          }
+        },
+        {
+          type: 'csv',
+          url: 'cars.csv',
+          name: 'cars',
+          then: result => {
+            return result.map(row => {
+              return {
+                year: new Date(+d.Year, 0, 1),
+                make: d.Make,
+                model: d.Model,
+                length: +d.Length
+              };
+            });
+          }
         }
-      },
-      {
-        type: 'csv',
-        url: 'cars.csv',
-        name: 'cars',
-        then: result => {
-          return result.map(row => {
-            return {
-              year: new Date(+d.Year, 0, 1),
-              make: d.Make,
-              model: d.Model,
-              length: +d.Length
-            };
-          });
-        }
-      }
-    ] });
+      ]
+    });
   }
 }
 
@@ -109,9 +119,27 @@ class MyModel extends Model {
   console.log(myModel.getNamedResource('cars'));
   // ( logs the formatted version of cars.csv )
   console.log(myModel.getNamedResource('config'));
-  // ( logs the contents of myConfiguration.json, not undefined,
+  // ( logs the contents of myConfiguration.json
   //   because storeOriginalResult was set to true )
 })();
+```
+
+### `loadLateResource()`
+All models can load resources outside of the constructor, however, these will
+always load after the `ready` promise resolves.
+```javascript
+class myModel extends Model {
+  constructor () {
+    super({
+      resources: [
+        { type: 'csv', url: 'data.csv' }
+      ]
+    });
+  }
+  async loadStyles () {
+    await this.loadLateResource({ type: 'less', url: 'conditionalStyle.less' });
+  }
+}
 ```
 
 
@@ -120,7 +148,7 @@ class MyModel extends Model {
 - [D3.js native formats](#d3_js_native_formats)
 - [Stylesheets](#stylesheets)
 - [Other JS libraries](#other_js_libraries)
-- [Raw fetch requests](#raw_fetch_requests)
+- [Fetch requests](#fetch_requests)
 - [Generic Promises](#generic_promises)
 
 ### D3.js native formats
@@ -133,24 +161,26 @@ imported as a resource. For each d3 type, use the `url` key in place of its
 ```javascript
 class MyModel extends Model {
   constructor() {
-    super({ resources: [
-      {
-        type: 'dsv',
-        delmiter: ',',
-        url: 'http://some/other/server/cars.csv',
-        init: {
-          mode: 'no-cors'
-        },
-        row: d => {
-          return {
-            year: new Date(+d.Year, 0, 1),
-            make: d.Make,
-            model: d.Model,
-            length: +d.Length
-          };
+    super({
+      resources: [
+        {
+          type: 'dsv',
+          delmiter: ',',
+          url: 'http://some/other/server/cars.csv',
+          init: {
+            mode: 'no-cors'
+          },
+          row: d => {
+            return {
+              year: new Date(+d.Year, 0, 1),
+              make: d.Make,
+              model: d.Model,
+              length: +d.Length
+            };
+          }
         }
-      }
-    ] });
+      ]
+    });
   }
 }
 
@@ -258,7 +288,7 @@ class MyModel extends Model {
 }
 ```
 
-### Raw fetch requests
+### Fetch requests
 
 `{ type: 'fetch', url: 'http://some/other/server/cars.csv', init: { mode: 'no-cors' }}`
 
