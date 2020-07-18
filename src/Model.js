@@ -6,12 +6,10 @@ class Model {
     this._stickyTriggers = {};
     this._resourceSpecs = options.resources || [];
     this._resourceLookup = {};
-    this.ready = new Promise(async (resolve, reject) => {
-      await this._loadResources(this._resourceSpecs);
-      this.trigger('load');
-      resolve();
-    });
+    this.ready = this._loadResources(this._resourceSpecs)
+      .then(() => { this.trigger('load'); });
   }
+
   _loadJS (url, raw, extraAttrs = {}) {
     if (Model.JS_PROMISES[url || raw]) {
       // We've already loaded the script
@@ -41,6 +39,7 @@ class Model {
     document.getElementsByTagName('head')[0].appendChild(script);
     return Model.JS_PROMISES[url];
   }
+
   _loadCSS (url, raw, extraAttrs = {}) {
     if (url !== undefined) {
       if (document.querySelector(`link[href="${url}"]`)) {
@@ -81,6 +80,7 @@ class Model {
       throw new Error('Either a url or raw argument is required for CSS resources');
     }
   }
+
   async _loadLESS (url, raw, extraAttrs = {}, lessArgs = {}) {
     if (url !== undefined) {
       if (Model.LESS_PROMISES[url]) {
@@ -103,6 +103,7 @@ class Model {
     });
     return Model.LESS_PROMISES[url || raw];
   }
+
   async _getCoreResourcePromise (spec) {
     let p;
     if (spec instanceof Promise) {
@@ -146,6 +147,7 @@ class Model {
     }
     return p;
   }
+
   async ensureLessIsLoaded () {
     if (!window.less || !window.less.render) {
       if (!window.less) {
@@ -156,6 +158,7 @@ class Model {
       await window._ukiLessPromise;
     }
   }
+
   async loadLateResource (spec) {
     await this.ready;
     if (spec.type === 'less') {
@@ -166,6 +169,7 @@ class Model {
     }
     this.resources.push(await this._getCoreResourcePromise(spec));
   }
+
   async _loadResources (specs = []) {
     // uki itself needs d3.js; make sure it exists
     if (!window.d3) {
@@ -206,11 +210,11 @@ class Model {
     }
     // Now do Kahn's algorithm to topologically sort the graph, starting from
     // the resources with no dependencies
-    let roots = Object.keys(specs)
+    const roots = Object.keys(specs)
       .filter(index => dependencies[index].length === 0);
     // Ensure that there's at least one root with no dependencies
     if (roots.length === 0) {
-      throw new Error(`No resource without loadAfter dependencies`);
+      throw new Error('No resource without loadAfter dependencies');
     }
     const topoSortOrder = [];
     while (roots.length > 0) {
@@ -229,7 +233,7 @@ class Model {
       }
     }
     if (topoSortOrder.length !== specs.length) {
-      throw new Error(`Cyclic loadAfter resource dependency`);
+      throw new Error('Cyclic loadAfter resource dependency');
     }
     // Load dependencies in topological order
     const resourcePromises = [];
@@ -242,12 +246,14 @@ class Model {
 
     this.resources = await Promise.all(resourcePromises);
   }
+
   getNamedResource (name) {
     return this._resourceLookup[name] === undefined ? null
       : this.resources[this._resourceLookup[name]];
   }
+
   on (eventName, callback) {
-    let [event, namespace] = eventName.split('.');
+    const [event, namespace] = eventName.split('.');
     this._eventHandlers[event] = this._eventHandlers[event] ||
       { '': [] };
     if (!namespace) {
@@ -256,14 +262,15 @@ class Model {
       this._eventHandlers[event][namespace] = callback;
     }
   }
+
   off (eventName, callback) {
-    let [event, namespace] = eventName.split('.');
+    const [event, namespace] = eventName.split('.');
     if (this._eventHandlers[event]) {
       if (!namespace) {
         if (!callback) {
           this._eventHandlers[event][''] = [];
         } else {
-          let index = this._eventHandlers[event][''].indexOf(callback);
+          const index = this._eventHandlers[event][''].indexOf(callback);
           if (index >= 0) {
             this._eventHandlers[event][''].splice(index, 1);
           }
@@ -273,6 +280,7 @@ class Model {
       }
     }
   }
+
   trigger (event, ...args) {
     // TODO: maybe promise-ify this, so that anyone triggering an event has a
     // way of knowing that everyone has finished responding to it?
@@ -291,12 +299,13 @@ class Model {
       }
     }
   }
+
   stickyTrigger (eventName, argObj, delay = 10) {
     this._stickyTriggers[eventName] = this._stickyTriggers[eventName] || { argObj: {} };
     Object.assign(this._stickyTriggers[eventName].argObj, argObj);
     clearTimeout(this._stickyTriggers.timeout);
     this._stickyTriggers.timeout = setTimeout(() => {
-      let argObj = this._stickyTriggers[eventName].argObj;
+      const argObj = this._stickyTriggers[eventName].argObj;
       delete this._stickyTriggers[eventName];
       this.trigger(eventName, argObj);
     }, delay);

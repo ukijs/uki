@@ -2,6 +2,8 @@
 
 A minimal, d3-based Model-View framework.
 
+[![js-semistandard-style](https://img.shields.io/badge/code%20style-semistandard-brightgreen.svg?style=flat-square)](https://github.com/standard/semistandard)
+
 # What is this?
 Yet another web framework ([why?](#why-another-framework)), originally designed
 as a fast way to design maintainable, multiple linked visualizations from

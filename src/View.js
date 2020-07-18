@@ -16,6 +16,7 @@ class View extends Model {
       this.render();
     }
   }
+
   checkForEmptySelection (d3el) {
     if (d3el && d3el.node() === null) {
       // Only trigger a warning if an empty selection gets passed in; undefined
@@ -26,9 +27,11 @@ class View extends Model {
       return d3el;
     }
   }
+
   get pauseRender () {
     return this._pauseRender;
   }
+
   set pauseRender (value) {
     this._pauseRender = value;
     if (!this._pauseRender) {
@@ -36,6 +39,7 @@ class View extends Model {
       this.render();
     }
   }
+
   async render (d3el = this.d3el) {
     d3el = this.checkForEmptySelection(d3el);
     if (!this.d3el || (d3el && d3el.node() !== this.d3el.node())) {
@@ -95,6 +99,7 @@ class View extends Model {
     this.emSize = parseFloat(d3el.style('font-size'));
     this.scrollBarSize = this.computeScrollBarSize(d3el);
   }
+
   getBounds (d3el = this.d3el) {
     if (d3el) {
       return d3el.node().getBoundingClientRect();
@@ -102,6 +107,7 @@ class View extends Model {
       return { width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
     }
   }
+
   computeScrollBarSize (d3el) {
     // blatantly adapted from SO thread:
     // http://stackoverflow.com/questions/13382516/getting-scroll-bar-width-using-javascript

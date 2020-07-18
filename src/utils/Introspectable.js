@@ -8,9 +8,11 @@ const { Introspectable, IntrospectableMixin } = createMixinAndDefault({
       get type () {
         return this.constructor.type;
       }
+
       get lowerCamelCaseType () {
         return this.constructor.lowerCamelCaseType;
       }
+
       get humanReadableType () {
         return this.constructor.humanReadableType;
       }

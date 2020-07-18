@@ -6,12 +6,10 @@ class Model {
     this._stickyTriggers = {};
     this._resourceSpecs = options.resources || [];
     this._resourceLookup = {};
-    this.ready = new Promise(async (resolve, reject) => {
-      await this._loadResources(this._resourceSpecs);
-      this.trigger('load');
-      resolve();
-    });
+    this.ready = this._loadResources(this._resourceSpecs)
+      .then(() => { this.trigger('load'); });
   }
+
   _loadJS (url, raw, extraAttrs = {}) {
     if (Model.JS_PROMISES[url || raw]) {
       // We've already loaded the script
@@ -41,6 +39,7 @@ class Model {
     document.getElementsByTagName('head')[0].appendChild(script);
     return Model.JS_PROMISES[url];
   }
+
   _loadCSS (url, raw, extraAttrs = {}) {
     if (url !== undefined) {
       if (document.querySelector(`link[href="${url}"]`)) {
@@ -81,6 +80,7 @@ class Model {
       throw new Error('Either a url or raw argument is required for CSS resources');
     }
   }
+
   async _loadLESS (url, raw, extraAttrs = {}, lessArgs = {}) {
     if (url !== undefined) {
       if (Model.LESS_PROMISES[url]) {
@@ -103,6 +103,7 @@ class Model {
     });
     return Model.LESS_PROMISES[url || raw];
   }
+
   async _getCoreResourcePromise (spec) {
     let p;
     if (spec instanceof Promise) {
@@ -146,6 +147,7 @@ class Model {
     }
     return p;
   }
+
   async ensureLessIsLoaded () {
     if (!window.less || !window.less.render) {
       if (!window.less) {
@@ -156,6 +158,7 @@ class Model {
       await window._ukiLessPromise;
     }
   }
+
   async loadLateResource (spec) {
     await this.ready;
     if (spec.type === 'less') {
@@ -166,6 +169,7 @@ class Model {
     }
     this.resources.push(await this._getCoreResourcePromise(spec));
   }
+
   async _loadResources (specs = []) {
     // uki itself needs d3.js; make sure it exists
     if (!window.d3) {
@@ -206,11 +210,11 @@ class Model {
     }
     // Now do Kahn's algorithm to topologically sort the graph, starting from
     // the resources with no dependencies
-    let roots = Object.keys(specs)
+    const roots = Object.keys(specs)
       .filter(index => dependencies[index].length === 0);
     // Ensure that there's at least one root with no dependencies
     if (roots.length === 0) {
-      throw new Error(`No resource without loadAfter dependencies`);
+      throw new Error('No resource without loadAfter dependencies');
     }
     const topoSortOrder = [];
     while (roots.length > 0) {
@@ -229,7 +233,7 @@ class Model {
       }
     }
     if (topoSortOrder.length !== specs.length) {
-      throw new Error(`Cyclic loadAfter resource dependency`);
+      throw new Error('Cyclic loadAfter resource dependency');
     }
     // Load dependencies in topological order
     const resourcePromises = [];
@@ -242,12 +246,14 @@ class Model {
 
     this.resources = await Promise.all(resourcePromises);
   }
+
   getNamedResource (name) {
     return this._resourceLookup[name] === undefined ? null
       : this.resources[this._resourceLookup[name]];
   }
+
   on (eventName, callback) {
-    let [event, namespace] = eventName.split('.');
+    const [event, namespace] = eventName.split('.');
     this._eventHandlers[event] = this._eventHandlers[event] ||
       { '': [] };
     if (!namespace) {
@@ -256,14 +262,15 @@ class Model {
       this._eventHandlers[event][namespace] = callback;
     }
   }
+
   off (eventName, callback) {
-    let [event, namespace] = eventName.split('.');
+    const [event, namespace] = eventName.split('.');
     if (this._eventHandlers[event]) {
       if (!namespace) {
         if (!callback) {
           this._eventHandlers[event][''] = [];
         } else {
-          let index = this._eventHandlers[event][''].indexOf(callback);
+          const index = this._eventHandlers[event][''].indexOf(callback);
           if (index >= 0) {
             this._eventHandlers[event][''].splice(index, 1);
           }
@@ -273,6 +280,7 @@ class Model {
       }
     }
   }
+
   trigger (event, ...args) {
     // TODO: maybe promise-ify this, so that anyone triggering an event has a
     // way of knowing that everyone has finished responding to it?
@@ -291,12 +299,13 @@ class Model {
       }
     }
   }
+
   stickyTrigger (eventName, argObj, delay = 10) {
     this._stickyTriggers[eventName] = this._stickyTriggers[eventName] || { argObj: {} };
     Object.assign(this._stickyTriggers[eventName].argObj, argObj);
     clearTimeout(this._stickyTriggers.timeout);
     this._stickyTriggers.timeout = setTimeout(() => {
-      let argObj = this._stickyTriggers[eventName].argObj;
+      const argObj = this._stickyTriggers[eventName].argObj;
       delete this._stickyTriggers[eventName];
       this.trigger(eventName, argObj);
     }, delay);
@@ -322,6 +331,7 @@ class View extends Model {
       this.render();
     }
   }
+
   checkForEmptySelection (d3el) {
     if (d3el && d3el.node() === null) {
       // Only trigger a warning if an empty selection gets passed in; undefined
@@ -332,9 +342,11 @@ class View extends Model {
       return d3el;
     }
   }
+
   get pauseRender () {
     return this._pauseRender;
   }
+
   set pauseRender (value) {
     this._pauseRender = value;
     if (!this._pauseRender) {
@@ -342,6 +354,7 @@ class View extends Model {
       this.render();
     }
   }
+
   async render (d3el = this.d3el) {
     d3el = this.checkForEmptySelection(d3el);
     if (!this.d3el || (d3el && d3el.node() !== this.d3el.node())) {
@@ -401,6 +414,7 @@ class View extends Model {
     this.emSize = parseFloat(d3el.style('font-size'));
     this.scrollBarSize = this.computeScrollBarSize(d3el);
   }
+
   getBounds (d3el = this.d3el) {
     if (d3el) {
       return d3el.node().getBoundingClientRect();
@@ -408,6 +422,7 @@ class View extends Model {
       return { width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
     }
   }
+
   computeScrollBarSize (d3el) {
     // blatantly adapted from SO thread:
     // http://stackoverflow.com/questions/13382516/getting-scroll-bar-width-using-javascript
@@ -493,9 +508,11 @@ const { Introspectable, IntrospectableMixin } = createMixinAndDefault({
       get type () {
         return this.constructor.type;
       }
+
       get lowerCamelCaseType () {
         return this.constructor.lowerCamelCaseType;
       }
+
       get humanReadableType () {
         return this.constructor.humanReadableType;
       }
@@ -530,12 +547,13 @@ var utils = /*#__PURE__*/Object.freeze({
 });
 
 var name = "uki";
-var version = "0.6.8";
+var version = "0.6.9";
 var description = "Minimal, d3-based Model-View library";
 var module = "dist/uki.esm.js";
 var scripts = {
 	example: "bash examples/run.sh",
 	build: "rollup -c && ls -d examples/*/ | xargs -n 1 cp -v dist/uki.esm.js",
+	lint: "eslint **/*.js --quiet",
 	dev: "rollup -c -w"
 };
 var repository = {
@@ -550,6 +568,13 @@ var bugs = {
 var homepage = "https://github.com/ukijs/uki#readme";
 var devDependencies = {
 	"@rollup/plugin-json": "^4.1.0",
+	eslint: "^7.4.0",
+	"eslint-config-semistandard": "^15.0.1",
+	"eslint-config-standard": "^14.1.1",
+	"eslint-plugin-import": "^2.22.0",
+	"eslint-plugin-node": "^11.1.0",
+	"eslint-plugin-promise": "^4.2.1",
+	"eslint-plugin-standard": "^4.0.1",
 	rollup: "^2.17.1",
 	serve: "^11.3.2"
 };
