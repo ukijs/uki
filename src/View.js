@@ -62,7 +62,16 @@ class View extends Model {
       this.updateContainerCharacteristics(this.d3el);
       this._setupPromise = this.setup(this.d3el);
       this.dirty = false;
-      await this._setupPromise;
+      try {
+        await this._setupPromise;
+      } catch (err) {
+        if (this.setupError) {
+          this._setupPromise = this.setupError(this.d3el, err);
+          await this._setupPromise;
+        } else {
+          throw err;
+        }
+      }
       delete this._setupPromise;
       this.trigger('setupFinished');
     }
@@ -75,6 +84,8 @@ class View extends Model {
       this._drawTimeout = setTimeout(async () => {
         this._drawTimeout = null;
         if (this._setupPromise) {
+          // Don't try / catch here because if there's an error, it will
+          // be handled exactly once in the original context
           await this._setupPromise;
         }
         if (this._pauseRender) {
@@ -82,7 +93,16 @@ class View extends Model {
           // resolve for this Promise has already been added to _renderResolves
           return;
         }
-        const result = await this.draw(this.d3el);
+        let result;
+        try {
+          result = await this.draw(this.d3el);
+        } catch (err) {
+          if (this.drawError) {
+            result = await this.drawError(this.d3el, err);
+          } else {
+            throw err;
+          }
+        }
         this.trigger('drawFinished');
         const temp = this._renderResolves;
         this._renderResolves = [];
@@ -93,8 +113,10 @@ class View extends Model {
     });
   }
 
-  setup (d3el = this.d3el) {}
-  draw (d3el = this.d3el) {}
+  async setup (d3el = this.d3el) {}
+
+  async draw (d3el = this.d3el) {}
+
   updateContainerCharacteristics (d3el) {
     this.emSize = parseFloat(d3el.style('font-size'));
     this.scrollBarSize = this.computeScrollBarSize(d3el);

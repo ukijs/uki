@@ -168,6 +168,7 @@ class Model {
       this._resourceLookup[spec.name] = this.resources.length;
     }
     this.resources.push(await this._getCoreResourcePromise(spec));
+    this.trigger('load');
   }
 
   async _loadResources (specs = []) {

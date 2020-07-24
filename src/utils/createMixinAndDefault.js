@@ -17,9 +17,9 @@ const createMixinAndDefault = function ({
     const MixedClass = classDefFunc(SuperClass);
     if (requireDefault &&
         SuperClass !== DefaultSuperClass &&
-        !(SuperClass.prototype instanceof DefaultSuperClass)) {
+        !(MixedClass.prototype instanceof DefaultSuperClass)) {
       // ... but in most cases, we require that it EVENTUALLY inherits from
-      // DefaultSuperClass. Can be overridden with requireDefault
+      // DefaultSuperClass. Can be overridden with requireDefault = false
       throw new Error(`${MixedClass.name} must inherit from ${DefaultSuperClass.name}`);
     }
     // Add a hidden property to the mixed class so we can handle instanceof

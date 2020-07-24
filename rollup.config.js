@@ -1,5 +1,6 @@
 import pkg from './package.json';
 import json from '@rollup/plugin-json';
+import execute from 'rollup-plugin-execute';
 
 // Derive some of the configuration from package.json
 const peerDependencies = Object.keys(pkg.peerDependencies);
@@ -17,6 +18,9 @@ export default [
       format: 'es'
     },
     external: allExternals,
-    plugins: [json()]
+    plugins: [
+      json(),
+      execute('ls -d examples/*/ | xargs -n 1 cp -v dist/uki.esm.js')
+    ]
   }
 ];

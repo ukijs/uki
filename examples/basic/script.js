@@ -5,6 +5,7 @@ class CustomView extends uki.View {
   setup () {
     this.d3el.append('p');
   }
+
   draw () {
     this.d3el.select('p')
       .text('Hello, world!');
