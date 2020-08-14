@@ -1,3 +1,4 @@
+/* globals d3, HTMLElement */
 import Model from './Model.js';
 
 /**
@@ -6,52 +7,96 @@ import Model from './Model.js';
 class View extends Model {
   constructor (options = {}) {
     super(options);
-    this.d3el = this.checkForEmptySelection(options.d3el || null);
     this.dirty = true;
-    this._pauseRender = false;
     this._drawTimeout = null;
     this._renderResolves = [];
     this.debounceWait = options.debounceWait || 100;
+    this.resetPauseReasons();
+    this.claimD3elOwnership(options.d3el || null, true);
     if (!options.suppressInitialRender) {
       this.render();
     }
   }
 
-  checkForEmptySelection (d3el) {
-    if (d3el && d3el.node() === null) {
-      // Only trigger a warning if an empty selection gets passed in; undefined
-      // is still just fine because render() doesn't always require an argument
-      console.warn('Empty d3 selection passed to uki.js View');
-      return null;
-    } else {
-      return d3el;
+  claimD3elOwnership (d3el, skipRenderCall = false) {
+    if (d3el instanceof HTMLElement) {
+      d3el = d3.select(HTMLElement);
+    }
+    if (d3el) {
+      const newNode = d3el.node();
+
+      if (newNode === null) {
+        // Only trigger a warning if an empty selection gets passed in; undefined
+        // is still just fine because render() doesn't always require an argument
+        console.warn('Empty d3 selection passed to uki.js View');
+        return;
+      } else if (newNode.__ukiView__) {
+        // The new element already had a view; let it know that we've taken over
+        newNode.__ukiView__.revokeD3elOwnership();
+      }
+
+      if (this.d3el && newNode !== this.d3el.node()) {
+        // We've been given a different element than what we used before
+        const oldNode = this.d3el.node();
+        delete oldNode.__ukiView__;
+      }
+
+      if (!this.d3el || newNode !== this.d3el.node()) {
+        newNode.__ukiView__ = this;
+        this.d3el = d3el;
+        this.dirty = true;
+        delete this._pauseRenderReasons['No d3el'];
+        if (!skipRenderCall) {
+          this.render();
+        }
+      }
     }
   }
 
-  get pauseRender () {
-    return this._pauseRender;
+  revokeD3elOwnership () {
+    if (this.d3el) {
+      delete this.d3el.node().__ukiView__;
+    }
+    this.d3el = null;
+    this.pauseRender('No d3el');
   }
 
-  set pauseRender (value) {
-    this._pauseRender = value;
-    if (!this._pauseRender) {
-      // Automatically start another render call if we unpause
+  resetPauseReasons () {
+    this._pauseRenderReasons = {};
+    if (!this.d3el) {
+      this._pauseRenderReasons['No d3el'] = true;
+    }
+  }
+
+  pauseRender (reason) {
+    this._pauseRenderReasons[reason] = true;
+    this.trigger('pauseRender', reason);
+  }
+
+  resumeRender (reason) {
+    if (!reason) {
+      this.resetPauseReasons();
+    } else {
+      delete this._pauseRenderReasons[reason];
+    }
+    if (!this.renderPaused) {
+      this.trigger('resumeRender');
       this.render();
     }
   }
 
+  get renderPaused () {
+    return Object.keys(this._pauseRenderReasons).length > 0;
+  }
+
   async render (d3el = this.d3el) {
-    d3el = this.checkForEmptySelection(d3el);
-    if (!this.d3el || (d3el && d3el.node() !== this.d3el.node())) {
-      this.d3el = d3el;
-      this.dirty = true;
-    }
+    this.claimD3elOwnership(d3el, true);
 
     await this.ready;
-    if (!this.d3el || this._pauseRender) {
+    if (this.renderPaused) {
       // Don't execute any render calls until all resources are loaded,
       // we've actually been given a d3 element to work with, and we're not
-      // paused
+      // paused for another reason
       return new Promise((resolve, reject) => {
         this._renderResolves.push(resolve);
       });
@@ -88,9 +133,10 @@ class View extends Model {
           // be handled exactly once in the original context
           await this._setupPromise;
         }
-        if (this._pauseRender) {
-          // Do a _pauseRender check immediately before we do a draw call;
-          // resolve for this Promise has already been added to _renderResolves
+        if (this.renderPaused) {
+          // Check if we've been paused after setup(), but before draw(); if
+          // we've been paused, wait for another render() call to resolve
+          // everything in this._renderResolves
           return;
         }
         let result;

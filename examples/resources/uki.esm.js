@@ -117,7 +117,7 @@ class Model {
       p = this._loadLESS(spec.url, spec.raw, spec.extraAttributes || {}, spec.lessArgs || {});
     } else if (spec.type === 'fetch') {
       // Raw fetch request
-      p = window.fetch(spec.url, spec.init || {});
+      p = globalThis.fetch(spec.url, spec.init || {});
     } else if (spec.type === 'js') {
       // Load a legacy JS script (i.e. something that can't be ES6-imported)
       p = this._loadJS(spec.url, spec.raw, spec.extraAttributes || {});
@@ -149,13 +149,13 @@ class Model {
   }
 
   async ensureLessIsLoaded () {
-    if (!window.less || !window.less.render) {
-      if (!window.less) {
+    if (!globalThis.less || !globalThis.less.render) {
+      if (!globalThis.less) {
         // Initial settings
-        window.less = { logLevel: 0 };
-        window._ukiLessPromise = this._loadJS('https://cdnjs.cloudflare.com/ajax/libs/less.js/3.11.1/less.min.js');
+        globalThis.less = { logLevel: 0 };
+        globalThis._ukiLessPromise = this._loadJS('https://cdnjs.cloudflare.com/ajax/libs/less.js/3.11.1/less.min.js');
       }
-      await window._ukiLessPromise;
+      await globalThis._ukiLessPromise;
     }
   }
 
@@ -173,7 +173,7 @@ class Model {
 
   async _loadResources (specs = []) {
     // uki itself needs d3.js; make sure it exists
-    if (!window.d3) {
+    if (!globalThis.d3) {
       await this._loadJS('https://d3js.org/d3.v5.min.js');
     }
 
@@ -286,7 +286,7 @@ class Model {
     // TODO: maybe promise-ify this, so that anyone triggering an event has a
     // way of knowing that everyone has finished responding to it?
     const handleCallback = callback => {
-      window.setTimeout(() => { // Timeout to prevent blocking
+      globalThis.setTimeout(() => { // Timeout to prevent blocking
         callback.apply(this, args);
       }, 0);
     };
@@ -316,58 +316,104 @@ Model.LESS_PROMISES = {};
 Model.JS_PROMISES = {};
 Model.RAW_CSS_PROMISES = {};
 
+/* globals d3, HTMLElement */
+
 /**
  * View classes
  */
 class View extends Model {
   constructor (options = {}) {
     super(options);
-    this.d3el = this.checkForEmptySelection(options.d3el || null);
     this.dirty = true;
-    this._pauseRender = false;
     this._drawTimeout = null;
     this._renderResolves = [];
     this.debounceWait = options.debounceWait || 100;
+    this.resetPauseReasons();
+    this.claimD3elOwnership(options.d3el || null, true);
     if (!options.suppressInitialRender) {
       this.render();
     }
   }
 
-  checkForEmptySelection (d3el) {
-    if (d3el && d3el.node() === null) {
-      // Only trigger a warning if an empty selection gets passed in; undefined
-      // is still just fine because render() doesn't always require an argument
-      console.warn('Empty d3 selection passed to uki.js View');
-      return null;
-    } else {
-      return d3el;
+  claimD3elOwnership (d3el, skipRenderCall = false) {
+    if (d3el instanceof HTMLElement) {
+      d3el = d3.select(HTMLElement);
+    }
+    if (d3el) {
+      const newNode = d3el.node();
+
+      if (newNode === null) {
+        // Only trigger a warning if an empty selection gets passed in; undefined
+        // is still just fine because render() doesn't always require an argument
+        console.warn('Empty d3 selection passed to uki.js View');
+        return;
+      } else if (newNode.__ukiView__) {
+        // The new element already had a view; let it know that we've taken over
+        newNode.__ukiView__.revokeD3elOwnership();
+      }
+
+      if (this.d3el && newNode !== this.d3el.node()) {
+        // We've been given a different element than what we used before
+        const oldNode = this.d3el.node();
+        delete oldNode.__ukiView__;
+      }
+
+      if (!this.d3el || newNode !== this.d3el.node()) {
+        newNode.__ukiView__ = this;
+        this.d3el = d3el;
+        this.dirty = true;
+        delete this._pauseRenderReasons['No d3el'];
+        if (!skipRenderCall) {
+          this.render();
+        }
+      }
     }
   }
 
-  get pauseRender () {
-    return this._pauseRender;
+  revokeD3elOwnership () {
+    if (this.d3el) {
+      delete this.d3el.node().__ukiView__;
+    }
+    this.d3el = null;
+    this.pauseRender('No d3el');
   }
 
-  set pauseRender (value) {
-    this._pauseRender = value;
-    if (!this._pauseRender) {
-      // Automatically start another render call if we unpause
+  resetPauseReasons () {
+    this._pauseRenderReasons = {};
+    if (!this.d3el) {
+      this._pauseRenderReasons['No d3el'] = true;
+    }
+  }
+
+  pauseRender (reason) {
+    this._pauseRenderReasons[reason] = true;
+    this.trigger('pauseRender', reason);
+  }
+
+  resumeRender (reason) {
+    if (!reason) {
+      this.resetPauseReasons();
+    } else {
+      delete this._pauseRenderReasons[reason];
+    }
+    if (!this.renderPaused) {
+      this.trigger('resumeRender');
       this.render();
     }
   }
 
+  get renderPaused () {
+    return Object.keys(this._pauseRenderReasons).length > 0;
+  }
+
   async render (d3el = this.d3el) {
-    d3el = this.checkForEmptySelection(d3el);
-    if (!this.d3el || (d3el && d3el.node() !== this.d3el.node())) {
-      this.d3el = d3el;
-      this.dirty = true;
-    }
+    this.claimD3elOwnership(d3el, true);
 
     await this.ready;
-    if (!this.d3el || this._pauseRender) {
+    if (this.renderPaused) {
       // Don't execute any render calls until all resources are loaded,
       // we've actually been given a d3 element to work with, and we're not
-      // paused
+      // paused for another reason
       return new Promise((resolve, reject) => {
         this._renderResolves.push(resolve);
       });
@@ -404,9 +450,10 @@ class View extends Model {
           // be handled exactly once in the original context
           await this._setupPromise;
         }
-        if (this._pauseRender) {
-          // Do a _pauseRender check immediately before we do a draw call;
-          // resolve for this Promise has already been added to _renderResolves
+        if (this.renderPaused) {
+          // Check if we've been paused after setup(), but before draw(); if
+          // we've been paused, wait for another render() call to resolve
+          // everything in this._renderResolves
           return;
         }
         let result;
@@ -507,13 +554,13 @@ const createMixinAndDefault = function ({
   const DefaultClass = Mixin(DefaultSuperClass);
   // Make the Mixin function behave like a class for instanceof Mixin checks
   Object.defineProperty(Mixin, Symbol.hasInstance, {
-    value: i => !!i[`_instanceOf${DefaultClass.name}`]
+    value: i => !!i?.[`_instanceOf${DefaultClass.name}`]
   });
   if (mixedInstanceOfDefault) {
     // Make instanceof DefaultClass true for anything that technically is only
     // an instanceof Mixin
     Object.defineProperty(DefaultClass, Symbol.hasInstance, {
-      value: i => !!i[`_instanceOf${DefaultClass.name}`]
+      value: i => !!i?.[`_instanceOf${DefaultClass.name}`]
     });
   }
   // Return both the default class and the mixin function
@@ -570,7 +617,7 @@ var utils = /*#__PURE__*/Object.freeze({
 });
 
 var name = "uki";
-var version = "0.7.0";
+var version = "0.7.1";
 var description = "Minimal, d3-based Model-View library";
 var module = "dist/uki.esm.js";
 var scripts = {

@@ -5,9 +5,6 @@ Developing
 - Promise-ifying `.trigger()` calls so that you can know when everyone has
   finished responding to an event?
 - Support non-absolute resource paths; can probably use new es2020 import.meta?
-- Be smarter about destruction: e.g. release references + fire events when
-  another view takes over this.d3el, and/or when the element is removed from
-  the DOM
 
 # Documentation TODOs:
 - migrate docs to ghpages

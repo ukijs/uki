@@ -117,7 +117,7 @@ class Model {
       p = this._loadLESS(spec.url, spec.raw, spec.extraAttributes || {}, spec.lessArgs || {});
     } else if (spec.type === 'fetch') {
       // Raw fetch request
-      p = window.fetch(spec.url, spec.init || {});
+      p = globalThis.fetch(spec.url, spec.init || {});
     } else if (spec.type === 'js') {
       // Load a legacy JS script (i.e. something that can't be ES6-imported)
       p = this._loadJS(spec.url, spec.raw, spec.extraAttributes || {});
@@ -149,13 +149,13 @@ class Model {
   }
 
   async ensureLessIsLoaded () {
-    if (!window.less || !window.less.render) {
-      if (!window.less) {
+    if (!globalThis.less || !globalThis.less.render) {
+      if (!globalThis.less) {
         // Initial settings
-        window.less = { logLevel: 0 };
-        window._ukiLessPromise = this._loadJS('https://cdnjs.cloudflare.com/ajax/libs/less.js/3.11.1/less.min.js');
+        globalThis.less = { logLevel: 0 };
+        globalThis._ukiLessPromise = this._loadJS('https://cdnjs.cloudflare.com/ajax/libs/less.js/3.11.1/less.min.js');
       }
-      await window._ukiLessPromise;
+      await globalThis._ukiLessPromise;
     }
   }
 
@@ -173,7 +173,7 @@ class Model {
 
   async _loadResources (specs = []) {
     // uki itself needs d3.js; make sure it exists
-    if (!window.d3) {
+    if (!globalThis.d3) {
       await this._loadJS('https://d3js.org/d3.v5.min.js');
     }
 
@@ -286,7 +286,7 @@ class Model {
     // TODO: maybe promise-ify this, so that anyone triggering an event has a
     // way of knowing that everyone has finished responding to it?
     const handleCallback = callback => {
-      window.setTimeout(() => { // Timeout to prevent blocking
+      globalThis.setTimeout(() => { // Timeout to prevent blocking
         callback.apply(this, args);
       }, 0);
     };

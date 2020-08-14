@@ -31,13 +31,13 @@ const createMixinAndDefault = function ({
   const DefaultClass = Mixin(DefaultSuperClass);
   // Make the Mixin function behave like a class for instanceof Mixin checks
   Object.defineProperty(Mixin, Symbol.hasInstance, {
-    value: i => !!i[`_instanceOf${DefaultClass.name}`]
+    value: i => !!i?.[`_instanceOf${DefaultClass.name}`]
   });
   if (mixedInstanceOfDefault) {
     // Make instanceof DefaultClass true for anything that technically is only
     // an instanceof Mixin
     Object.defineProperty(DefaultClass, Symbol.hasInstance, {
-      value: i => !!i[`_instanceOf${DefaultClass.name}`]
+      value: i => !!i?.[`_instanceOf${DefaultClass.name}`]
     });
   }
   // Return both the default class and the mixin function
