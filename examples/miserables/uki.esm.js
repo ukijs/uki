@@ -427,9 +427,10 @@ const { View, ViewMixin } = createMixinAndDefault({
       constructor (options = {}) {
         super(options);
         this.dirty = true;
+        this.debounceWait = options.debounceWait || 100;
+        this._mutationObserver = null;
         this._drawTimeout = null;
         this._renderResolves = [];
-        this.debounceWait = options.debounceWait || 100;
         this.resetPauseReasons();
         this.claimD3elOwnership(options.d3el || null, true);
         if (!options.suppressInitialRender) {
@@ -442,29 +443,62 @@ const { View, ViewMixin } = createMixinAndDefault({
           d3el = d3.select(HTMLElement);
         }
         if (d3el) {
+          if (d3el.size() === 0) {
+            console.warn('Ignoring empty d3 selection assigned to uki.js View');
+            return;
+          } else if (d3el.size() > 1) {
+            console.warn('Ignoring d3 selection with multiple nodes assigned to uki.js View');
+            return;
+          }
+
           const newNode = d3el.node();
 
-          if (newNode === null) {
-            // Only trigger a warning if an empty selection gets passed in; undefined
-            // is still just fine because render() doesn't always require an argument
-            console.warn('Empty d3 selection passed to uki.js View');
-            return;
-          } else if (newNode.__ukiView__) {
+          let claimNode = false;
+          let revokeOldOwnership = false;
+          if (!this.d3el) {
+            // Always claim if we don't currently have an element
+            claimNode = true;
+            revokeOldOwnership = !!newNode.__ukiView__;
+          } else {
+            // Only go through the process of claiming the new node if it's
+            // different from our current one
+            claimNode = newNode !== this.d3el.node();
+            revokeOldOwnership = claimNode && newNode.__ukiView__;
+          }
+
+          if (revokeOldOwnership) {
             // The new element already had a view; let it know that we've taken over
             newNode.__ukiView__.revokeD3elOwnership();
           }
 
-          if (this.d3el && newNode !== this.d3el.node()) {
-            // We've been given a different element than what we used before
-            const oldNode = this.d3el.node();
-            delete oldNode.__ukiView__;
-          }
+          if (claimNode) {
+            if (this.d3el) {
+              // We've been given a different element than what we used before
+              const oldNode = this.d3el.node();
+              delete oldNode.__ukiView__;
+              if (this._mutationObserver) {
+                this._mutationObserver.disconnect();
+              }
+            }
 
-          if (!this.d3el || newNode !== this.d3el.node()) {
+            // Assign ourselves the new new node
             newNode.__ukiView__ = this;
             this.d3el = d3el;
             this.dirty = true;
             delete this._pauseRenderReasons['No d3el'];
+
+            // Detect if the DOM node is ever removed
+            this._mutationObserver = new globalThis.MutationObserver(mutationList => {
+              for (const mutation of mutationList) {
+                for (const removedNode of mutation.removedNodes) {
+                  if (removedNode === newNode) {
+                    this.revokeD3elOwnership();
+                  }
+                }
+              }
+            });
+            this._mutationObserver.observe(newNode.parentNode, { childList: true });
+
             if (!skipRenderCall) {
               this.render();
             }
@@ -476,15 +510,11 @@ const { View, ViewMixin } = createMixinAndDefault({
         if (this.d3el) {
           delete this.d3el.node().__ukiView__;
         }
+        if (this._mutationObserver) {
+          this._mutationObserver.disconnect();
+        }
         this.d3el = null;
         this.pauseRender('No d3el');
-      }
-
-      resetPauseReasons () {
-        this._pauseRenderReasons = {};
-        if (!this.d3el) {
-          this._pauseRenderReasons['No d3el'] = true;
-        }
       }
 
       pauseRender (reason) {
@@ -501,6 +531,13 @@ const { View, ViewMixin } = createMixinAndDefault({
         if (!this.renderPaused) {
           this.trigger('resumeRender');
           this.render();
+        }
+      }
+
+      resetPauseReasons () {
+        this._pauseRenderReasons = {};
+        if (!this.d3el) {
+          this._pauseRenderReasons['No d3el'] = true;
         }
       }
 
@@ -621,13 +658,27 @@ const { View, ViewMixin } = createMixinAndDefault({
 
         return widthNoScroll - widthWithScroll;
       }
+
+      static initForD3Selection (selection, optionsAccessor = d => d) {
+        const ClassDef = this;
+        selection.each(function () {
+          const view = new ClassDef(optionsAccessor(...arguments));
+          view.render(d3.select(this));
+        });
+      }
+
+      static iterD3Selection (selection, func) {
+        selection.each(function () {
+          func.call(this, this.__ukiView__, ...arguments);
+        });
+      }
     }
     return View;
   }
 });
 
 var name = "uki";
-var version = "0.7.1";
+var version = "0.7.2";
 var description = "Minimal, d3-based Model-View library";
 var module = "dist/uki.esm.js";
 var scripts = {
