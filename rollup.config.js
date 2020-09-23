@@ -20,7 +20,7 @@ export default [
     external: allExternals,
     plugins: [
       json(),
-      execute('ls -d examples/*/ | xargs -n 1 cp -v dist/uki.esm.js')
+      execute('sleep 1 && ls -d examples/*/ | xargs -n 1 cp -v dist/uki.esm.js')
     ]
   }
 ];

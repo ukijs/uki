@@ -69,6 +69,11 @@ class CustomView extends uki.View {
         })
       ]
     });
+
+    // Give us a d3el *very* late to demo uki dynamically loading d3
+    this.ready.then(() => {
+      this.render(d3.select('#myView'));
+    });
   }
 
   setup () {
@@ -96,4 +101,3 @@ class CustomView extends uki.View {
 }
 
 window.testView = new CustomView();
-window.testView.render(d3.select('#myView'));

@@ -12,6 +12,7 @@ class NodeLinkView extends View {
     this.graph = graph;
     this.graph.on('highlight', () => { this.render(); });
   }
+
   async setup () {
     // setup() will usually only be called once
 
@@ -29,18 +30,18 @@ class NodeLinkView extends View {
 
     // Create the drag behavior
     this.dragBehavior = d3.drag()
-      .on('start', d => {
-        if (!d3.event.active) {
+      .on('start', (event, d) => {
+        if (!event.active) {
           this.simulation.alphaTarget(0.3).restart();
         }
         d.fx = d.x;
         d.fy = d.y;
         this.graph.highlightNode(d);
-      }).on('drag', d => {
-        d.fx = d3.event.x;
-        d.fy = d3.event.y;
-      }).on('end', d => {
-        if (!d3.event.active) {
+      }).on('drag', (event, d) => {
+        d.fx = event.x;
+        d.fy = event.y;
+      }).on('end', (event, d) => {
+        if (!event.active) {
           this.simulation.alphaTarget(0);
           d.fx = null;
           d.fy = null;
@@ -52,6 +53,7 @@ class NodeLinkView extends View {
       this.render();
     });
   }
+
   async draw () {
     // Temporarily set the SVG's size to zero so that it doesn't affect the
     // calculation of available space as determined by CSS
