@@ -1,10 +1,42 @@
 @import url('https://fonts.googleapis.com/css?family=Source+Code+Pro:600');
-@fontWeight: 600;
+
+:root {
+  --code-font-weight: 600;
+
+  /* color mixing example borrowed from https://una.im/css-color-theming/ */
+  --color-1-h: 265;
+  --color-1-s: 100%;
+  --color-1-l: 47%;
+  --color-1: hsl(var(--color-1-h), var(--color-1-s), var(--color-1-l));
+
+  --color-2-h: 180;
+  --color-2-s: 99%;
+  --color-2-l: 27%;
+  --color-2: hsl(var(--color-2-h), var(--color-2-s), var(--color-2-l));
+
+  /*  Get Mixed Values (Average) */
+  --avg-h: calc((var(--color-1-h) + var(--color-2-h)) / 2);
+  --avg-s: calc((var(--color-1-s) + var(--color-2-s)) / 2);
+  --avg-l: calc((var(--color-1-l) + var(--color-2-l)) / 2);
+
+  /*  Here's the Mixed Color  */
+  --mixed-color: hsl(var(--avg-h), var(--avg-s), var(--avg-l));
+}
 
 .data {
   display: flex;
-  pre {
-    font-family: 'Source Code Pro', monospace;
-    font-weight: @fontWeight;
-  }
+}
+.data pre {
+  font-family: 'Source Code Pro', monospace;
+  font-weight: var(--code-font-weight);
+  color: var(--code-color);
+}
+.data pre:nth-child(3n+1) {
+  color: var(--color-1);
+}
+.data pre:nth-child(3n+2) {
+  color: var(--mixed-color);
+}
+.data pre:nth-child(3n) {
+  color: var(--color-2);
 }

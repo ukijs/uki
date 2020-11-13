@@ -102,11 +102,16 @@ const { Model, ModelMixin } = createMixinAndDefault({
       constructor (options = {}) {
         super(...arguments);
         this._eventHandlers = {};
+        this._pendingEvents = {};
         this._stickyTriggers = {};
         this._resourceSpecs = options.resources || [];
         this._resourceLookup = {};
+        this._resourcesLoaded = false;
         this.ready = this._loadResources(this._resourceSpecs)
-          .then(() => { this.trigger('load'); });
+          .then(() => {
+            this._resourcesLoaded = true;
+            this.trigger('load');
+          });
       }
 
       _loadJS (url, raw, extraAttrs = {}) {
@@ -139,50 +144,77 @@ const { Model, ModelMixin } = createMixinAndDefault({
         return Model.JS_PROMISES[url];
       }
 
-      _loadCSS (url, raw, extraAttrs = {}, unshift = false) {
+      _loadCSS (url, raw, extraAttrs = {}, unshift = false, prelimResults = {}) {
         if (url !== undefined) {
-          if (document.querySelector(`link[href="${url}"]`)) {
+          let linkTag = document.querySelector(`link[href="${url}"]`);
+          if (linkTag) {
             // We've already added this stylesheet
-            return Promise.resolve(document.querySelector(`link[href="${url}"]`));
+            Object.assign(prelimResults, { linkTag, cssVariables: this.extractCSSVariables(linkTag) });
+            return Promise.resolve(prelimResults);
           }
-          const link = document.createElement('link');
-          link.rel = 'stylesheet';
-          link.type = 'text/css';
-          link.media = 'screen';
+          linkTag = document.createElement('link');
+          linkTag.rel = 'stylesheet';
+          linkTag.type = 'text/css';
+          linkTag.media = 'screen';
           for (const [key, value] of Object.keys(extraAttrs)) {
-            link.setAttribute(key, value);
+            linkTag.setAttribute(key, value);
           }
           const loadPromise = new Promise((resolve, reject) => {
-            link.onload = () => { resolve(link); };
+            linkTag.onload = () => {
+              Object.assign(prelimResults, { linkTag, cssVariables: this.extractCSSVariables(linkTag) });
+              resolve(prelimResults);
+            };
           });
-          link.href = url;
-          document.getElementsByTagName('head')[0].appendChild(link);
+          linkTag.href = url;
+          document.getElementsByTagName('head')[0].appendChild(linkTag);
           return loadPromise;
         } else if (raw !== undefined) {
           if (Model.RAW_CSS_PROMISES[raw]) {
             return Model.RAW_CSS_PROMISES[raw];
           }
-          const style = document.createElement('style');
-          style.type = 'text/css';
+          const styleTag = document.createElement('style');
+          styleTag.type = 'text/css';
           for (const [key, value] of Object.keys(extraAttrs)) {
-            style.setAttribute(key, value);
+            styleTag.setAttribute(key, value);
           }
-          if (style.styleSheet) {
-            style.styleSheet.cssText = raw;
+          if (styleTag.styleSheet) {
+            styleTag.styleSheet.cssText = raw;
           } else {
-            style.innerHTML = raw;
+            styleTag.innerHTML = raw;
           }
           const head = document.getElementsByTagName('head')[0];
           if (unshift) {
-            head.prepend(style);
+            head.prepend(styleTag);
           } else {
-            head.appendChild(style);
+            head.appendChild(styleTag);
           }
-          Model.RAW_CSS_PROMISES[raw] = Promise.resolve(style);
+          Object.assign(prelimResults, { styleTag, cssVariables: this.extractCSSVariables(styleTag) });
+          Model.RAW_CSS_PROMISES[raw] = prelimResults;
           return Model.RAW_CSS_PROMISES[raw];
         } else {
           throw new Error('Either a url or raw argument is required for CSS resources');
         }
+      }
+
+      extractCSSVariables (tag) {
+        const result = {};
+
+        const computedStyles = globalThis.getComputedStyle(document.documentElement);
+
+        const extractRules = parent => {
+          for (const rule of parent.cssRules) {
+            if (rule.selectorText === ':root') {
+              for (const variableName of rule.style) {
+                result[variableName] = computedStyles.getPropertyValue(variableName).trim();
+              }
+            } else if (rule.cssRules) {
+              extractRules(rule);
+            }
+          }
+        };
+
+        extractRules(tag.sheet);
+        return result;
       }
 
       async _loadLESS (url, raw, extraAttrs = {}, lessArgs = {}, unshift = false) {
@@ -201,8 +233,10 @@ const { Model, ModelMixin } = createMixinAndDefault({
         }
         const cssPromise = url ? less.render(`@import '${url}';`) : less.render(raw, lessArgs);
         Model.LESS_PROMISES[url || raw] = cssPromise.then(result => {
-          // TODO: maybe do magic here to make LESS variables accessible under
-          // this.resources?
+          // TODO: there isn't a way to get variable declarations out of
+          // less.render... but ideally we'd want to add a
+          // prelimResults = { lessVariables: {} }
+          // argument here
           return this._loadCSS(undefined, result.css, extraAttrs, unshift);
         });
         return Model.LESS_PROMISES[url || raw];
@@ -263,8 +297,16 @@ const { Model, ModelMixin } = createMixinAndDefault({
         }
       }
 
-      async loadLateResource (spec) {
+      async loadLateResource (spec, override = false) {
         await this.ready;
+        this._resourcesLoaded = false;
+        if (this._resourceLookup[spec.name] !== undefined) {
+          if (override) {
+            return this.updateResource(spec);
+          } else {
+            throw new Error(`Resource ${spec.name} already exists, use override = true to overwrite`);
+          }
+        }
         if (spec.type === 'less') {
           await this.ensureLessIsLoaded();
         }
@@ -272,19 +314,26 @@ const { Model, ModelMixin } = createMixinAndDefault({
           this._resourceLookup[spec.name] = this.resources.length;
         }
         this.resources.push(await this._getCoreResourcePromise(spec));
+        this._resourcesLoaded = true;
         this.trigger('load');
       }
 
-      async updateResource (spec) {
+      async updateResource (spec, allowLate = false) {
         await this.ready;
+        this._resourcesLoaded = false;
+        const index = this._resourceLookup[spec.name];
+        if (index === undefined) {
+          if (allowLate) {
+            return this.loadLateResource(spec);
+          } else {
+            throw new Error(`Can't update unknown resource: ${spec.name}, use allowLate = true to create anyway`);
+          }
+        }
         if (spec.type === 'less') {
           await this.ensureLessIsLoaded();
         }
-        const index = this._resourceLookup[spec.name];
-        if (index === undefined) {
-          throw new Error(`Can't update unknown resource: ${spec.name}, loading as new (late) resource...`);
-        }
         this.resources[index] = await this._getCoreResourcePromise(spec);
+        this._resourcesLoaded = true;
         this.trigger('load');
       }
 
@@ -372,8 +421,8 @@ const { Model, ModelMixin } = createMixinAndDefault({
 
       on (eventName, callback) {
         const [event, namespace] = eventName.split('.');
-        this._eventHandlers[event] = this._eventHandlers[event] ||
-          { '': [] };
+        this._eventHandlers[event] = this._eventHandlers[event] || { '': [] };
+        this._pendingEvents[event] = this._pendingEvents[event] || [];
         if (!namespace) {
           this._eventHandlers[event][''].push(callback);
         } else {
@@ -386,47 +435,105 @@ const { Model, ModelMixin } = createMixinAndDefault({
         if (this._eventHandlers[event]) {
           if (!namespace) {
             if (!callback) {
+              // No namespace or specific callback function; remove all handlers
+              // and pending events for this event
               this._eventHandlers[event][''] = [];
+              delete this._pendingEvents[event];
             } else {
+              // Only remove handlers and pending events for a specific callback
+              // function
               const index = this._eventHandlers[event][''].indexOf(callback);
               if (index >= 0) {
                 this._eventHandlers[event][''].splice(index, 1);
               }
+              for (const [index, eventParams] of Object.entries(this._pendingEvents[event])) {
+                if (eventParams.callback === callback) {
+                  delete this._pendingEvents[event][index];
+                }
+              }
             }
           } else {
+            // Remove all handlers and pending events that use this namespace
+            // (when dealing with namespaces, the specific callback function
+            // is irrelevant)
             delete this._eventHandlers[event][namespace];
+            for (const [index, eventParams] of Object.entries(this._pendingEvents[event])) {
+              if (eventParams.namespace === namespace) {
+                delete this._pendingEvents[event][index];
+              }
+            }
           }
         }
       }
 
-      trigger (event, ...args) {
-        // TODO: maybe promise-ify this, so that anyone triggering an event has a
-        // way of knowing that everyone has finished responding to it?
-        const handleCallback = callback => {
-          globalThis.setTimeout(() => { // Timeout to prevent blocking
-            callback.apply(this, args);
-          }, 0);
+      async trigger (event, ...args) {
+        const handleCallback = (callback, namespace = '') => {
+          const index = this._pendingEvents[event].length;
+          this._pendingEvents[event].push({ thisObj: this, callback, args, namespace });
+          // Make a local pointer, because this could get swapped out by takeOverEvents()
+          const pendingEventList = this._pendingEvents[event];
+          return new Promise((resolve, reject) => {
+            globalThis.setTimeout(() => { // Timeout to prevent blocking
+              if (!pendingEventList[index]) {
+                reject(new Error(`Listener for event ${event} was removed before pending callback could be executed`));
+              } else {
+                const eventParams = pendingEventList[index];
+                delete pendingEventList[index];
+                resolve(callback.apply(eventParams.thisObj, eventParams.callback, eventParams.args));
+              }
+            }, 0);
+          });
         };
+        const promises = [];
         if (this._eventHandlers[event]) {
           for (const namespace of Object.keys(this._eventHandlers[event])) {
             if (namespace === '') {
-              this._eventHandlers[event][''].forEach(handleCallback);
+              promises.push(...this._eventHandlers[event][''].map(handleCallback));
             } else {
-              handleCallback(this._eventHandlers[event][namespace]);
+              promises.push(handleCallback(this._eventHandlers[event][namespace], namespace));
             }
           }
         }
+        return Promise.all(promises);
       }
 
-      stickyTrigger (eventName, argObj, delay = 10) {
-        this._stickyTriggers[eventName] = this._stickyTriggers[eventName] || { argObj: {} };
+      async stickyTrigger (eventName, argObj, delay = 10) {
+        this._stickyTriggers[eventName] = this._stickyTriggers[eventName] || { thisObj: this, argObj: {}, timeout: undefined };
         Object.assign(this._stickyTriggers[eventName].argObj, argObj);
-        clearTimeout(this._stickyTriggers.timeout);
-        this._stickyTriggers.timeout = setTimeout(() => {
-          const argObj = this._stickyTriggers[eventName].argObj;
-          delete this._stickyTriggers[eventName];
-          this.trigger(eventName, argObj);
-        }, delay);
+        clearTimeout(this._stickyTriggers[eventName].timeout);
+        // Make a local pointer, because this could get swapped out by takeOverEvents()
+        const stickyTriggers = this._stickyTriggers;
+        return new Promise((resolve, reject) => {
+          stickyTriggers[eventName].timeout = setTimeout(() => {
+            const stickyParams = stickyTriggers[eventName];
+            delete stickyTriggers[eventName];
+            try {
+              resolve(stickyParams.thisObj.trigger(eventName, stickyParams.argObj));
+            } catch (error) {
+              reject(error);
+            }
+          }, delay);
+        });
+      }
+
+      takeOverEvents (otherModel) {
+        Object.assign(this._eventHandlers, otherModel._eventHandlers);
+        otherModel._eventHandlers = {};
+
+        // For any pending events + sticky events, we ONLY need to take over the
+        // thisObj; things will still be appropriately deleted via local pointers
+
+        for (const stickyParams of Object.values(otherModel._stickyTriggers)) {
+          stickyParams.thisObj = this;
+        }
+        otherModel._stickyTriggers = {};
+
+        for (const paramList of Object.values(otherModel._pendingEvents)) {
+          for (const eventParams of paramList) {
+            eventParams.thisObj = this;
+          }
+        }
+        otherModel._pendingEvents = {};
       }
     }
     Model.LESS_PROMISES = {};
@@ -700,7 +807,7 @@ const { View, ViewMixin } = createMixinAndDefault({
 });
 
 var name = "uki";
-var version = "0.7.4";
+var version = "0.7.5";
 var description = "Minimal, d3-based Model-View library";
 var module = "dist/uki.esm.js";
 var scripts = {
