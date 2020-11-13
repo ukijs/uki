@@ -807,7 +807,7 @@ const { View, ViewMixin } = createMixinAndDefault({
 });
 
 var name = "uki";
-var version = "0.7.5";
+var version = "0.7.6";
 var description = "Minimal, d3-based Model-View library";
 var module = "dist/uki.esm.js";
 var scripts = {
@@ -848,19 +848,19 @@ var eslintConfig = {
 };
 var devDependencies = {
 	"@rollup/plugin-json": "^4.1.0",
-	eslint: "^7.9.0",
+	eslint: "^7.13.0",
 	"eslint-config-semistandard": "^15.0.1",
-	"eslint-config-standard": "^14.1.1",
-	"eslint-plugin-import": "^2.22.0",
+	"eslint-config-standard": "^16.0.1",
+	"eslint-plugin-import": "^2.22.1",
 	"eslint-plugin-node": "^11.1.0",
 	"eslint-plugin-promise": "^4.2.1",
-	"eslint-plugin-standard": "^4.0.1",
-	rollup: "^2.28.1",
+	"eslint-plugin-standard": "^4.1.0",
+	rollup: "^2.33.1",
 	"rollup-plugin-execute": "^1.1.1",
 	serve: "^11.3.2"
 };
 var peerDependencies = {
-	d3: "^6.1.1"
+	d3: "^6.2.0"
 };
 var optionalDependencies = {
 	less: "^3.12.2"
