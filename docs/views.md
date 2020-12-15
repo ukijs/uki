@@ -2,33 +2,38 @@ Views
 =====
 
 Views can do everything Models can do, as well as:
-1. Abstracts away some of the worries about the timing and context of
+1. Abstracts away some common complications about the timing and context of
   [rendering views](#Rendering).
 2. Provides / updates some [basic statistics](#Drawing_statistics) that are
    commonly used in designing custom visual interfaces
 
 # Setting up views
 Like `Model`, the `View` is designed to be overridden with your custom code. For
-views, you should override the `setup` and/or `draw` functions (should feel sort
-of familiar to [Processing](https://processing.org/) fans). Typically, you won't
-call these functions directly (though nothing will break if you do); instead,
-you will call the view's `render()` function to tell it to initialize or update
-itself.
+views, you should override and implement `setup` and/or `draw` functions (which
+should feel sort of familiar to [Processing](https://processing.org/) fans).
+Typically, you won't call these functions directly (though we won't try to stop
+you if you need to); instead, you will call the view's `render()` function to
+tell it to initialize or update itself.
+
+`render()` ensures that all needed resources have loaded, and that a DOM element
+has been uniquely assigned to the `View`, before attempting `setup()` and
+`draw()`. It also catches errors and redirects to `setupError()` and
+`drawError()` to facilitate more informative interfaces.
 
 ## Creating views
 
-To instantiate a view, you need to give it a d3-selected DOM element *at some
-point*, that will be available to `setup` and `draw` calls as `this.d3el`. You
-can do this during initialization, or as an argument to any subsequent
-`render()` call. For example:
+To instantiate a view, you need to give it a d3-selected DOM element
+*at some point*, that will be available to `setup` and `draw` calls as
+`this.d3el`. You can do this during initialization, or as an argument to any
+subsequent `render()` call. For example:
 
 ```javascript
-class MyView extends View {
-  setup () {
+class MyView extends uki.View {
+  async setup () {
     this.d3el.html('<p>Called setup, but not draw yet...</p>')
   }
-  draw () {
-    this.d3el.select('p')
+  async draw () {
+    this.d3el.append('p')
       .text('...just called draw!')
   }
 }
@@ -39,22 +44,37 @@ const view2 = new MyView();
 view1.render();
 view2.render();
 
-// At this point, view1 will have drawn its contents, but view2 is waiting for
-// a DOM element
+// At this point, view1's setup() and draw() will be colled, but view2 is
+// waiting for a DOM element
 
 view2.render(d3.select('#view2'));
-// Now view2 will have drawn
+// Now view2's setup() and draw() will be called
 ```
 
 ## Rendering
 Exactly when / how / how often you call `render` is up to you. In general, you
 shouldn't need to worry about doing it too often (even if your `draw()` function
 is somewhat expensive), as `setup()` is only called once, and `draw()` will be
-debounced—meaning that you can fire it as much as you like without affecting
-performance.
+debounced—meaning that you can call `render()` as much as you like without
+significantly affecting performance:
 
-`render()` also returns a Promise that resolves when `draw()` is finally
-complete.
+```javascript
+class MyView extends uki.View {
+  async setup () {
+    // Set up a listener that will likely fire rapidly when the user interacts
+    this.d3el.on('scroll', () => { this.render(); });
+  }
+  async draw () {
+    // Expensive draw() command only gets called when the user FINISHES scrolling
+    for (let i = 0; i < 10000; i++) {
+      this.d3el.append('p').text(i);
+    }
+  }
+}
+```
+
+`render()` also returns a Promise that resolves when `setup()` and `draw()` have
+both finally completed.
 
 A common pattern for larger apps is to listen to specific model changes,
 and update when those changes are relevant, e.g.:

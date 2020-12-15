@@ -3,18 +3,25 @@ import { View } from '../../uki.esm.js';
 
 class NodeLinkView extends View {
   constructor (graph) {
+    // Default arguments include a resources list, that specifies data or
+    // other files that must be loaded before setup() or draw() ever get called
     super({
       resources: [
         { type: 'text', url: '/views/NodeLinkView/template.html', name: 'template' },
         { type: 'css', url: '/views/NodeLinkView/style.css' }
       ]
     });
+
+    // Here we give the view a reference to the model that it's supposed to
+    // render. We also listen for changes in the model, so that we know when to
+    // update the view
     this.graph = graph;
     this.graph.on('highlight', () => { this.render(); });
   }
 
   async setup () {
-    // setup() will usually only be called once
+    // setup() will usually only be called once; it is free to make sweeping
+    // DOM changes like .html() calls
 
     // Put the contents of template.html into the #nodeLinkView div
     this.d3el.html(this.getNamedResource('template'));
@@ -48,6 +55,8 @@ class NodeLinkView extends View {
         }
       });
 
+    // Listen for a custom "resize" event, and restart the simulation to adapt
+    // to the available space
     this.on('resize', () => {
       this.simulation.alphaTarget(0.3).restart();
       this.render();
@@ -55,12 +64,18 @@ class NodeLinkView extends View {
   }
 
   async draw () {
+    // draw is called multiple times; it should be written to update the view
+    // based on the current state of the model
+
     // Temporarily set the SVG's size to zero so that it doesn't affect the
     // calculation of available space as determined by CSS
     const svg = this.d3el.select('svg')
       .attr('width', 0)
       .attr('height', 0);
 
+    // By default, Views compute getBounds based on the boundingClientRect of
+    // this.d3el, but Views expose this as a function for composability;
+    // subclasses and mixins can override with custom behavior
     const bounds = this.getBounds();
 
     // Update the bounds of the view to match the current window size

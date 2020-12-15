@@ -93,8 +93,6 @@ var utils = /*#__PURE__*/Object.freeze({
   IntrospectableMixin: IntrospectableMixin
 });
 
-/* globals d3, less */
-
 const { Model, ModelMixin } = createMixinAndDefault({
   DefaultSuperClass: Object,
   classDefFunc: SuperClass => {
@@ -202,7 +200,16 @@ const { Model, ModelMixin } = createMixinAndDefault({
         const computedStyles = globalThis.getComputedStyle(document.documentElement);
 
         const extractRules = parent => {
-          for (const rule of parent.cssRules) {
+          let rules;
+          try {
+            rules = parent?.cssRules || parent?.rules || [];
+          } catch (e) {
+            // If loading a stylesheet from a different domain (e.g. uki-ui hits
+            // this with goldenlayout stylesheets), CORS will throw an error if
+            // we attempt to access parent.cssRules directly
+            return;
+          }
+          for (const rule of rules) {
             if (rule.selectorText === ':root') {
               for (const variableName of rule.style) {
                 result[variableName] = computedStyles.getPropertyValue(variableName).trim();
@@ -231,7 +238,7 @@ const { Model, ModelMixin } = createMixinAndDefault({
         } else {
           throw new Error('Either a url or raw argument is required for LESS resources');
         }
-        const cssPromise = url ? less.render(`@import '${url}';`) : less.render(raw, lessArgs);
+        const cssPromise = url ? globalThis.less.render(`@import '${url}';`) : globalThis.less.render(raw, lessArgs);
         Model.LESS_PROMISES[url || raw] = cssPromise.then(result => {
           // TODO: there isn't a way to get variable declarations out of
           // less.render... but ideally we'd want to add a
@@ -242,11 +249,34 @@ const { Model, ModelMixin } = createMixinAndDefault({
         return Model.LESS_PROMISES[url || raw];
       }
 
-      async _getCoreResourcePromise (spec) {
+      async _getCoreResourcePromise (spec, dependencyResultList) {
         let p;
+        if (typeof spec.skipWhen === 'function' && spec.skipWhen(...dependencyResultList)) {
+          // A resource that is only conditionally fetched / calculated; if the
+          // resource is skipped, apply defaultValue (null unless specified)
+          return Promise.resolve(spec.defaultValue !== undefined ? spec.defaultValue : null);
+        }
+
         if (spec instanceof Promise) {
           // An arbitrary promise
           return spec;
+        } else if (spec.type === 'deferred') {
+          // A placeholder resource that reserves the name, but doesn't affect
+          // this.ready from resolving. Usually this will be updated later, e.g.
+          // if a view needs to know how big its d3el is before requesting a
+          // certain resolution of data from an API
+          return Promise.resolve(spec.defaultValue !== undefined ? spec.defaultValue : null);
+        } else if (spec.type === 'derivation') {
+          // Allow async local computation of resources (e.g. in a web worker)
+          // that can still take advantage of loadAfter + then, and will prevent
+          // this.ready from resolving before the computation is finished
+          p = new Promise((resolve, reject) => {
+            try {
+              resolve(spec.derive(...dependencyResultList));
+            } catch (e) {
+              reject(e);
+            }
+          });
         } else if (spec.type === 'css') {
           // Load pure css directly
           p = this._loadCSS(spec.url, spec.raw, spec.extraAttributes || {}, spec.unshift);
@@ -259,7 +289,7 @@ const { Model, ModelMixin } = createMixinAndDefault({
         } else if (spec.type === 'js') {
           // Load a legacy JS script (i.e. something that can't be ES6-imported)
           p = this._loadJS(spec.url, spec.raw, spec.extraAttributes || {});
-        } else if (d3[spec.type]) {
+        } else if (globalThis.d3[spec.type]) {
           // One of D3's native types
           const args = [];
           if (spec.init) {
@@ -269,9 +299,9 @@ const { Model, ModelMixin } = createMixinAndDefault({
             args.push(spec.row);
           }
           if (spec.type === 'dsv') {
-            p = d3[spec.type](spec.delimiter, spec.url, ...args);
+            p = globalThis.d3[spec.type](spec.delimiter, spec.url, ...args);
           } else {
-            p = d3[spec.type](spec.url, ...args);
+            p = globalThis.d3[spec.type](spec.url, ...args);
           }
         } else {
           throw new Error(`Can't load resource ${spec.url} of type ${spec.type}`);
@@ -297,7 +327,7 @@ const { Model, ModelMixin } = createMixinAndDefault({
         }
       }
 
-      async loadLateResource (spec, override = false) {
+      async loadLateResource (spec, override = true) {
         await this.ready;
         this._resourcesLoaded = false;
         if (this._resourceLookup[spec.name] !== undefined) {
@@ -310,15 +340,18 @@ const { Model, ModelMixin } = createMixinAndDefault({
         if (spec.type === 'less') {
           await this.ensureLessIsLoaded();
         }
+        const dependencyResultList = (spec.loadAfter || []).map(otherResourceName => {
+          return this.getNamedResource(otherResourceName);
+        });
+        this.resources.push(await this._getCoreResourcePromise(spec, dependencyResultList));
         if (spec.name) {
-          this._resourceLookup[spec.name] = this.resources.length;
+          this._resourceLookup[spec.name] = this.resources.length - 1;
         }
-        this.resources.push(await this._getCoreResourcePromise(spec));
         this._resourcesLoaded = true;
         this.trigger('load');
       }
 
-      async updateResource (spec, allowLate = false) {
+      async updateResource (spec, allowLate = true) {
         await this.ready;
         this._resourcesLoaded = false;
         const index = this._resourceLookup[spec.name];
@@ -332,7 +365,10 @@ const { Model, ModelMixin } = createMixinAndDefault({
         if (spec.type === 'less') {
           await this.ensureLessIsLoaded();
         }
-        this.resources[index] = await this._getCoreResourcePromise(spec);
+        const dependencyResultList = (spec.loadAfter || []).map(otherResourceName => {
+          return this.getNamedResource(otherResourceName);
+        });
+        this.resources[index] = await this._getCoreResourcePromise(spec, dependencyResultList);
         this._resourcesLoaded = true;
         this.trigger('load');
       }
@@ -408,14 +444,15 @@ const { Model, ModelMixin } = createMixinAndDefault({
           const parentPromises = dependencies[index]
             .map(parentIndex => resourcePromises[parentIndex]);
           resourcePromises[index] = Promise.all(parentPromises)
-            .then(() => this._getCoreResourcePromise(specs[index]));
+            .then(dependencyResultList => this._getCoreResourcePromise(specs[index], dependencyResultList));
         }
 
         this.resources = await Promise.all(resourcePromises);
       }
 
       getNamedResource (name) {
-        return this._resourceLookup[name] === undefined ? null
+        return this._resourceLookup[name] === undefined
+          ? null
           : this.resources[this._resourceLookup[name]];
       }
 
@@ -466,20 +503,37 @@ const { Model, ModelMixin } = createMixinAndDefault({
         }
       }
 
-      async trigger (event, ...args) {
+      async trigger (event, argList, rejectOnListenerRemoval = false) {
         const handleCallback = (callback, namespace = '') => {
-          const index = this._pendingEvents[event].length;
-          this._pendingEvents[event].push({ thisObj: this, callback, args, namespace });
-          // Make a local pointer, because this could get swapped out by takeOverEvents()
+          const eventParams = { thisObj: this, callback, argList, namespace };
+          // Find an open slot in the list; as we rely on index numbers to be
+          // consistent, we reuse slots after they clear instead of shortening
+          // the array
+          let freeIndex = 0;
+          while (freeIndex < this._pendingEvents[event].length && this._pendingEvents[event][freeIndex] !== undefined) {
+            freeIndex += 1;
+          }
+          if (freeIndex === this._pendingEvents[event].length) {
+            this._pendingEvents[event].push(eventParams);
+          } else {
+            this._pendingEvents[freeIndex] = eventParams;
+          }
+
+          // Make a local pointer to the list, because "this" could get swapped
+          // out by takeOverEvents()
           const pendingEventList = this._pendingEvents[event];
           return new Promise((resolve, reject) => {
             globalThis.setTimeout(() => { // Timeout to prevent blocking
-              if (!pendingEventList[index]) {
-                reject(new Error(`Listener for event ${event} was removed before pending callback could be executed`));
+              if (!pendingEventList[freeIndex]) {
+                if (rejectOnListenerRemoval) {
+                  reject(new Error(`Listener for event ${event} was removed before pending callback could be executed`));
+                } else {
+                  resolve(null);
+                }
               } else {
-                const eventParams = pendingEventList[index];
-                delete pendingEventList[index];
-                resolve(callback.apply(eventParams.thisObj, eventParams.callback, eventParams.args));
+                const eventParams = pendingEventList[freeIndex];
+                delete pendingEventList[freeIndex];
+                resolve(callback.apply(eventParams.thisObj, eventParams.callback, eventParams.argList));
               }
             }, 0);
           });
@@ -497,7 +551,7 @@ const { Model, ModelMixin } = createMixinAndDefault({
         return Promise.all(promises);
       }
 
-      async stickyTrigger (eventName, argObj, delay = 10) {
+      async stickyTrigger (eventName, argObj, delay = 10, rejectOnListenerRemoval = false) {
         this._stickyTriggers[eventName] = this._stickyTriggers[eventName] || { thisObj: this, argObj: {}, timeout: undefined };
         Object.assign(this._stickyTriggers[eventName].argObj, argObj);
         clearTimeout(this._stickyTriggers[eventName].timeout);
@@ -508,7 +562,7 @@ const { Model, ModelMixin } = createMixinAndDefault({
             const stickyParams = stickyTriggers[eventName];
             delete stickyTriggers[eventName];
             try {
-              resolve(stickyParams.thisObj.trigger(eventName, stickyParams.argObj));
+              resolve(stickyParams.thisObj.trigger(eventName, [stickyParams.argObj], rejectOnListenerRemoval));
             } catch (error) {
               reject(error);
             }
@@ -530,7 +584,9 @@ const { Model, ModelMixin } = createMixinAndDefault({
 
         for (const paramList of Object.values(otherModel._pendingEvents)) {
           for (const eventParams of paramList) {
-            eventParams.thisObj = this;
+            if (eventParams !== undefined) {
+              eventParams.thisObj = this;
+            }
           }
         }
         otherModel._pendingEvents = {};
@@ -542,8 +598,6 @@ const { Model, ModelMixin } = createMixinAndDefault({
     return Model;
   }
 });
-
-/* globals d3, HTMLElement */
 
 const { View, ViewMixin } = createMixinAndDefault({
   DefaultSuperClass: Model,
@@ -564,8 +618,8 @@ const { View, ViewMixin } = createMixinAndDefault({
       }
 
       claimD3elOwnership (d3el, skipRenderCall = false) {
-        if (d3el instanceof HTMLElement) {
-          d3el = d3.select(HTMLElement);
+        if (d3el instanceof globalThis.HTMLElement) {
+          d3el = globalThis.d3.select(globalThis.HTMLElement);
         }
         if (d3el) {
           if (d3el.size() === 0) {
@@ -686,9 +740,8 @@ const { View, ViewMixin } = createMixinAndDefault({
         if (this.dirty && this._setupPromise === undefined) {
           // Need a fresh render; call setup immediately
           this.updateContainerCharacteristics(this.d3el);
-          this._setupPromise = this.setup(this.d3el);
-          this.dirty = false;
           try {
+            this._setupPromise = this.setup(this.d3el);
             await this._setupPromise;
           } catch (err) {
             if (this.setupError) {
@@ -698,6 +751,7 @@ const { View, ViewMixin } = createMixinAndDefault({
               throw err;
             }
           }
+          this.dirty = false;
           delete this._setupPromise;
           this.trigger('setupFinished');
         }
@@ -760,23 +814,23 @@ const { View, ViewMixin } = createMixinAndDefault({
       computeScrollBarSize (d3el) {
         // blatantly adapted from SO thread:
         // http://stackoverflow.com/questions/13382516/getting-scroll-bar-width-using-javascript
-        var outer = document.createElement('div');
+        const outer = document.createElement('div');
         outer.style.visibility = 'hidden';
         outer.style.width = '100px';
         outer.style.msOverflowStyle = 'scrollbar'; // needed for WinJS apps
 
         d3el.node().appendChild(outer);
 
-        var widthNoScroll = outer.offsetWidth;
+        const widthNoScroll = outer.offsetWidth;
         // force scrollbars
         outer.style.overflow = 'scroll';
 
         // add innerdiv
-        var inner = document.createElement('div');
+        const inner = document.createElement('div');
         inner.style.width = '100%';
         outer.appendChild(inner);
 
-        var widthWithScroll = inner.offsetWidth;
+        const widthWithScroll = inner.offsetWidth;
 
         // remove divs
         outer.parentNode.removeChild(outer);
@@ -789,7 +843,7 @@ const { View, ViewMixin } = createMixinAndDefault({
         const promises = [];
         selection.each(function () {
           const view = new ClassDef(optionsAccessor(...arguments));
-          promises.push(view.render(d3.select(this)));
+          promises.push(view.render(globalThis.d3.select(this)));
         });
         return Promise.all(promises);
       }
@@ -807,7 +861,7 @@ const { View, ViewMixin } = createMixinAndDefault({
 });
 
 var name = "uki";
-var version = "0.7.6";
+var version = "0.7.7";
 var description = "Minimal, d3-based Model-View library";
 var module = "dist/uki.esm.js";
 var scripts = {

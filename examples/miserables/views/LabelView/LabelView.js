@@ -10,6 +10,7 @@ class LabelView extends View {
     this.graph = graph;
     this.graph.on('highlight', () => { this.render(); });
   }
+
   async draw () {
     // Draw the currently highlighted node name, or clear the contents if
     // nothing is selected

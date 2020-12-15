@@ -1,4 +1,3 @@
-/* globals d3, HTMLElement */
 import { Model } from './Model.js';
 import * as utils from './utils/utils.js';
 
@@ -21,8 +20,8 @@ const { View, ViewMixin } = utils.createMixinAndDefault({
       }
 
       claimD3elOwnership (d3el, skipRenderCall = false) {
-        if (d3el instanceof HTMLElement) {
-          d3el = d3.select(HTMLElement);
+        if (d3el instanceof globalThis.HTMLElement) {
+          d3el = globalThis.d3.select(globalThis.HTMLElement);
         }
         if (d3el) {
           if (d3el.size() === 0) {
@@ -143,9 +142,8 @@ const { View, ViewMixin } = utils.createMixinAndDefault({
         if (this.dirty && this._setupPromise === undefined) {
           // Need a fresh render; call setup immediately
           this.updateContainerCharacteristics(this.d3el);
-          this._setupPromise = this.setup(this.d3el);
-          this.dirty = false;
           try {
+            this._setupPromise = this.setup(this.d3el);
             await this._setupPromise;
           } catch (err) {
             if (this.setupError) {
@@ -155,6 +153,7 @@ const { View, ViewMixin } = utils.createMixinAndDefault({
               throw err;
             }
           }
+          this.dirty = false;
           delete this._setupPromise;
           this.trigger('setupFinished');
         }
@@ -217,23 +216,23 @@ const { View, ViewMixin } = utils.createMixinAndDefault({
       computeScrollBarSize (d3el) {
         // blatantly adapted from SO thread:
         // http://stackoverflow.com/questions/13382516/getting-scroll-bar-width-using-javascript
-        var outer = document.createElement('div');
+        const outer = document.createElement('div');
         outer.style.visibility = 'hidden';
         outer.style.width = '100px';
         outer.style.msOverflowStyle = 'scrollbar'; // needed for WinJS apps
 
         d3el.node().appendChild(outer);
 
-        var widthNoScroll = outer.offsetWidth;
+        const widthNoScroll = outer.offsetWidth;
         // force scrollbars
         outer.style.overflow = 'scroll';
 
         // add innerdiv
-        var inner = document.createElement('div');
+        const inner = document.createElement('div');
         inner.style.width = '100%';
         outer.appendChild(inner);
 
-        var widthWithScroll = inner.offsetWidth;
+        const widthWithScroll = inner.offsetWidth;
 
         // remove divs
         outer.parentNode.removeChild(outer);
@@ -246,7 +245,7 @@ const { View, ViewMixin } = utils.createMixinAndDefault({
         const promises = [];
         selection.each(function () {
           const view = new ClassDef(optionsAccessor(...arguments));
-          promises.push(view.render(d3.select(this)));
+          promises.push(view.render(globalThis.d3.select(this)));
         });
         return Promise.all(promises);
       }

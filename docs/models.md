@@ -14,14 +14,36 @@ state across linked views.
 
 # Importing resources
 You can give a `Model` an array of resources that will be loaded into the
-browser as the `Model` is created (if they haven't been loaded already). Where
-there is a parsed result (such as a CSV file), it can be accessed through the
+browser as the `Model` is created (if they haven't been loaded already).
+Resources are available from a `Model` once its `ready` Promise resolves.
+
+```javascript
+class MyModel extends Model {
+  constructor() {
+    super({
+      resources: [
+        { type: 'csv', url: 'myData.csv', name: 'My CSV Data' },
+        { type: 'json', url: 'myConfiguration.json' }
+      ]
+    });
+  }
+}
+
+(async () => {
+  const myModel = new MyModel();
+  await myModel.ready;
+
+  console.log(myModel.getNamedResource('My CSV Data'));
+  // Logs the parsed contents of myData.csv
+})();
+```
+
+Where there is a parsed result (such as a CSV file), you can access it can be accessed through the
 `this.resources` list (in the same order as the original `resources` option), or
 you can give a string `name` to resources that you can use for
 `getNamedResource()` access that doesn't depend on the order of that list.
 
-Resources are available from a `Model` once its `ready` Promise resolves. Also
-note that `View`s will not attempt to render until `ready` resolves.
+
 
 Each entry in the array should be an `Object` with `type` and `url` properties,
 for example:
