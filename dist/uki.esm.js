@@ -93,6 +93,21 @@ var utils = /*#__PURE__*/Object.freeze({
   IntrospectableMixin: IntrospectableMixin
 });
 
+// These are meant to imitate d3-fetch's code, because we want to mimic its API,
+// but it swallows + hides server error message details that we want to forward
+const D3_PARSERS = {
+  text: (text, response, spec) => text,
+  json: (text, response, spec) => response.status === 204 || response.status === 205
+    ? undefined
+    : JSON.parse(text),
+  xml: (text, response, spec) => new globalThis.DOMParser().parseFromString(text, 'application/xml'),
+  html: (text, response, spec) => new globalThis.DOMParser().parseFromString(text, 'text/html'),
+  svg: (text, response, spec) => new globalThis.DOMParser().parseFromString(text, 'image/svg+xml'),
+  dsv: (text, response, spec) => globalThis.d3.dsvFormat(spec.delimiter).parse(text, spec.row),
+  csv: (text, response, spec) => globalThis.d3.csvParse(text, spec.row),
+  tsv: (text, response, spec) => globalThis.d3.tsvParse(text, spec.row)
+};
+
 const { Model, ModelMixin } = createMixinAndDefault({
   DefaultSuperClass: Object,
   classDefFunc: SuperClass => {
@@ -108,8 +123,12 @@ const { Model, ModelMixin } = createMixinAndDefault({
         this.ready = this._loadResources(this._resourceSpecs)
           .then(() => {
             this._resourcesLoaded = true;
-            this.trigger('load');
+            this.trigger('resourcesLoaded');
           });
+      }
+
+      get isLoading () {
+        return !this._resourcesLoaded;
       }
 
       _loadJS (url, raw, extraAttrs = {}) {
@@ -260,12 +279,16 @@ const { Model, ModelMixin } = createMixinAndDefault({
         if (spec instanceof Promise) {
           // An arbitrary promise
           return spec;
-        } else if (spec.type === 'deferred') {
-          // A placeholder resource that reserves the name, but doesn't affect
-          // this.ready from resolving. Usually this will be updated later, e.g.
-          // if a view needs to know how big its d3el is before requesting a
-          // certain resolution of data from an API
-          return Promise.resolve(spec.defaultValue !== undefined ? spec.defaultValue : null);
+        } else if (spec.type === 'placeholder') {
+          // A placeholder resource that reserves the name, and may or may not
+          // affect this.ready from resolving (using preventReady). Usually this
+          // will be updated later, e.g. if a view needs to know how big its
+          // d3el is before requesting a certain resolution of data from an API
+          if (spec.preventReady) {
+            return new Promise((resolve, reject) => {});
+          } else {
+            return Promise.resolve(spec.value !== undefined ? spec.value : null);
+          }
         } else if (spec.type === 'derivation') {
           // Allow async local computation of resources (e.g. in a web worker)
           // that can still take advantage of loadAfter + then, and will prevent
@@ -289,22 +312,36 @@ const { Model, ModelMixin } = createMixinAndDefault({
         } else if (spec.type === 'js') {
           // Load a legacy JS script (i.e. something that can't be ES6-imported)
           p = this._loadJS(spec.url, spec.raw, spec.extraAttributes || {});
-        } else if (globalThis.d3[spec.type]) {
-          // One of D3's native types
-          const args = [];
-          if (spec.init) {
-            args.push(spec.init);
-          }
-          if (spec.row) {
-            args.push(spec.row);
-          }
-          if (spec.type === 'dsv') {
-            p = globalThis.d3[spec.type](spec.delimiter, spec.url, ...args);
-          } else {
-            p = globalThis.d3[spec.type](spec.url, ...args);
-          }
+        } else if (D3_PARSERS[spec.type]) {
+          // One of D3's native types... but we do the fetch manually because d3
+          // doesn't have a way for us to access and forward informative error
+          // messages (VERY important for things like uki-ui's InformativeView)
+          p = globalThis.fetch(spec.url, spec.init || {})
+            // Combine attempts to get response body text with the response
+            // itself for unified error capturing
+            .then(response => Promise.all([response, response.text()]))
+            .then(([response, text]) => {
+              if (!response.ok) {
+                const httpError = new Error(response.status + ' ' + response.statusText);
+                httpError.status = response.status;
+                httpError.statusText = response.statusText;
+                try {
+                  // Attempt to attach any JSON the server sent back...
+                  httpError.body = JSON.parse(text);
+                } catch (error) {
+                  // ... if it's not JSON, still include the plain text if
+                  // that's what the server is sending back
+                  httpError.body = text;
+                }
+                throw httpError;
+              } else {
+                // The response was fine, use d3's strategy / functions to deal
+                // with the response body
+                return D3_PARSERS[spec.type](text, response, spec);
+              }
+            });
         } else {
-          throw new Error(`Can't load resource ${spec.url} of type ${spec.type}`);
+          throw new Error(`Can't load resource ${spec.name || ''} of type ${spec.type}`);
         }
         if (spec.then) {
           if (spec.storeOriginalResult) {
@@ -328,57 +365,72 @@ const { Model, ModelMixin } = createMixinAndDefault({
       }
 
       async loadLateResource (spec, override = true) {
-        await this.ready;
-        this._resourcesLoaded = false;
-        if (this._resourceLookup[spec.name] !== undefined) {
-          if (override) {
-            return this.updateResource(spec);
-          } else {
-            throw new Error(`Resource ${spec.name} already exists, use override = true to overwrite`);
+        this.ready = this.ready.then(async () => {
+          this._resourcesLoaded = false;
+          if (this._resourceLookup[spec.name] !== undefined) {
+            if (override) {
+              return this.updateResource(spec);
+            } else {
+              throw new Error(`Resource ${spec.name} already exists, use override = true to overwrite`);
+            }
           }
-        }
-        if (spec.type === 'less') {
-          await this.ensureLessIsLoaded();
-        }
-        const dependencyResultList = (spec.loadAfter || []).map(otherResourceName => {
-          return this.getNamedResource(otherResourceName);
+          if (spec.type === 'less') {
+            await this.ensureLessIsLoaded();
+          }
+          const dependencyResultList = (spec.loadAfter || []).map(otherResourceName => {
+            return this.getNamedResource(otherResourceName);
+          });
+          const resourceIndex = this.resources.length;
+          try {
+            this.resources[resourceIndex] = await this._getCoreResourcePromise(spec, dependencyResultList);
+          } catch (error) {
+            this.resources[resourceIndex] = error;
+          }
+
+          if (spec.name) {
+            this._resourceLookup[spec.name] = resourceIndex;
+          }
+          this._resourcesLoaded = true;
+          this.trigger('resourceLoaded', this.resources[resourceIndex]);
         });
-        this.resources.push(await this._getCoreResourcePromise(spec, dependencyResultList));
-        if (spec.name) {
-          this._resourceLookup[spec.name] = this.resources.length - 1;
-        }
-        this._resourcesLoaded = true;
-        this.trigger('load');
+        return this.ready;
       }
 
       async updateResource (spec, allowLate = true) {
-        await this.ready;
-        this._resourcesLoaded = false;
-        const index = this._resourceLookup[spec.name];
-        if (index === undefined) {
-          if (allowLate) {
-            return this.loadLateResource(spec);
-          } else {
-            throw new Error(`Can't update unknown resource: ${spec.name}, use allowLate = true to create anyway`);
+        // TODO: prevent waiting for a series of rapid-fire resource updates; if
+        // a queued update has not even started, prevent it and replace it with
+        // this attempt. Probably use per-resource clearTimeouts?
+        this.ready = this.ready.then(async () => {
+          this._resourcesLoaded = false;
+          const index = this._resourceLookup[spec.name];
+          if (index === undefined) {
+            if (allowLate) {
+              return this.loadLateResource(spec);
+            } else {
+              throw new Error(`Can't update unknown resource: ${spec.name}, use allowLate = true to create anyway`);
+            }
           }
-        }
-        if (spec.type === 'less') {
-          await this.ensureLessIsLoaded();
-        }
-        const dependencyResultList = (spec.loadAfter || []).map(otherResourceName => {
-          return this.getNamedResource(otherResourceName);
+          this.trigger('resourceUnloaded', this.resources[index]);
+          this.resources[index] = null;
+          if (spec.type === 'less') {
+            await this.ensureLessIsLoaded();
+          }
+          const dependencyResultList = (spec.loadAfter || []).map(otherResourceName => {
+            return this.getNamedResource(otherResourceName);
+          });
+          try {
+            this.resources[index] = await this._getCoreResourcePromise(spec, dependencyResultList);
+          } catch (error) {
+            this.resources[index] = error;
+          }
+
+          this._resourcesLoaded = true;
+          this.trigger('resourceLoaded', this.resources[index]);
         });
-        this.resources[index] = await this._getCoreResourcePromise(spec, dependencyResultList);
-        this._resourcesLoaded = true;
-        this.trigger('load');
+        return this.ready;
       }
 
       async _loadResources (specs = []) {
-        // uki itself needs d3.js; make sure it exists
-        if (!globalThis.d3) {
-          await this._loadJS(globalThis.uki.dynamicDependencies.d3);
-        }
-
         // Don't need to do anything else; this makes some code cleaner below
         if (specs.length === 0) {
           return;
@@ -407,6 +459,10 @@ const { Model, ModelMixin } = createMixinAndDefault({
           tempDependencies.push(Array.from(result));
           return result;
         });
+        // uki itself needs d3.js; make sure it exists
+        if (!globalThis.d3) {
+          await this._loadJS(globalThis.uki.dynamicDependencies.d3);
+        }
         // Add and await LESS script if needed
         if (hasLESSresources) {
           await this.ensureLessIsLoaded();
@@ -443,17 +499,23 @@ const { Model, ModelMixin } = createMixinAndDefault({
         for (const index of topoSortOrder) {
           const parentPromises = dependencies[index]
             .map(parentIndex => resourcePromises[parentIndex]);
-          resourcePromises[index] = Promise.all(parentPromises)
+          resourcePromises[index] = Promise.all(parentPromises.map(p => p.catch(error => error)))
             .then(dependencyResultList => this._getCoreResourcePromise(specs[index], dependencyResultList));
         }
 
-        this.resources = await Promise.all(resourcePromises);
+        // Wait for everything to load, and collect any errors in the place of
+        // the resource contents
+        this.resources = await Promise.all(resourcePromises.map(p => p.catch(error => error)));
       }
 
       getNamedResource (name) {
-        return this._resourceLookup[name] === undefined
+        return this.resources === undefined || this._resourceLookup[name] === undefined
           ? null
           : this.resources[this._resourceLookup[name]];
+      }
+
+      hasNamedResource (name) {
+        return this.resources !== undefined && this._resourceLookup[name] !== undefined;
       }
 
       on (eventName, callback) {
@@ -483,7 +545,7 @@ const { Model, ModelMixin } = createMixinAndDefault({
               if (index >= 0) {
                 this._eventHandlers[event][''].splice(index, 1);
               }
-              for (const [index, eventParams] of Object.entries(this._pendingEvents[event])) {
+              for (const [index, eventParams] of Object.entries(this._pendingEvents[event] || [])) {
                 if (eventParams.callback === callback) {
                   delete this._pendingEvents[event][index];
                 }
@@ -494,7 +556,7 @@ const { Model, ModelMixin } = createMixinAndDefault({
             // (when dealing with namespaces, the specific callback function
             // is irrelevant)
             delete this._eventHandlers[event][namespace];
-            for (const [index, eventParams] of Object.entries(this._pendingEvents[event])) {
+            for (const [index, eventParams] of Object.entries(this._pendingEvents[event] || [])) {
               if (eventParams.namespace === namespace) {
                 delete this._pendingEvents[event][index];
               }
@@ -506,6 +568,8 @@ const { Model, ModelMixin } = createMixinAndDefault({
       async trigger (event, argList, rejectOnListenerRemoval = false) {
         const handleCallback = (callback, namespace = '') => {
           const eventParams = { thisObj: this, callback, argList, namespace };
+          this._pendingEvents[event] = this._pendingEvents[event] || [];
+
           // Find an open slot in the list; as we rely on index numbers to be
           // consistent, we reuse slots after they clear instead of shortening
           // the array
@@ -516,11 +580,11 @@ const { Model, ModelMixin } = createMixinAndDefault({
           if (freeIndex === this._pendingEvents[event].length) {
             this._pendingEvents[event].push(eventParams);
           } else {
-            this._pendingEvents[freeIndex] = eventParams;
+            this._pendingEvents[event][freeIndex] = eventParams;
           }
 
-          // Make a local pointer to the list, because "this" could get swapped
-          // out by takeOverEvents()
+          // Make a local reference to the list, because "this" could get
+          // swapped out by takeOverEvents()
           const pendingEventList = this._pendingEvents[event];
           return new Promise((resolve, reject) => {
             globalThis.setTimeout(() => { // Timeout to prevent blocking
@@ -533,7 +597,7 @@ const { Model, ModelMixin } = createMixinAndDefault({
               } else {
                 const eventParams = pendingEventList[freeIndex];
                 delete pendingEventList[freeIndex];
-                resolve(callback.apply(eventParams.thisObj, eventParams.callback, eventParams.argList));
+                resolve(eventParams.callback.apply(eventParams.thisObj, eventParams.argList));
               }
             }, 0);
           });
@@ -548,7 +612,22 @@ const { Model, ModelMixin } = createMixinAndDefault({
             }
           }
         }
-        return Promise.all(promises);
+        return Promise.all(promises.map(p => p.catch(error => error)));
+      }
+
+      syncTrigger (event, argList) {
+        const handleCallback = (callback, namespace = '') => {
+          callback.apply(this, argList);
+        };
+        if (this._eventHandlers[event]) {
+          for (const namespace of Object.keys(this._eventHandlers[event])) {
+            if (namespace === '') {
+              this._eventHandlers[event][''].forEach(handleCallback);
+            } else {
+              handleCallback(this._eventHandlers[event][namespace], namespace);
+            }
+          }
+        }
       }
 
       async stickyTrigger (eventName, argObj, delay = 10, rejectOnListenerRemoval = false) {
@@ -861,7 +940,7 @@ const { View, ViewMixin } = createMixinAndDefault({
 });
 
 var name = "uki";
-var version = "0.7.7";
+var version = "0.7.8";
 var description = "Minimal, d3-based Model-View library";
 var module = "dist/uki.esm.js";
 var scripts = {
