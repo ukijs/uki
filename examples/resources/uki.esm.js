@@ -24,20 +24,27 @@ const createMixinAndDefault = function ({
     }
     // Add a hidden property to the mixed class so we can handle instanceof
     // checks properly
-    MixedClass.prototype[`_instanceOf${MixedClass.name}`] = true;
+    MixedClass.prototype._ukiMixinInheritance = (SuperClass.prototype._ukiMixinInheritance || []).concat([MixedClass.name]);
     return MixedClass;
   };
   // Default class definition inherits directly from DefaultSuperClass
   const DefaultClass = Mixin(DefaultSuperClass);
-  // Make the Mixin function behave like a class for instanceof Mixin checks
+  // Make the Mixin function behave like a class for instanceof Mixin checks;
+  // the tested object should start with the same class inheritance order
   Object.defineProperty(Mixin, Symbol.hasInstance, {
-    value: i => !!i?.[`_instanceOf${DefaultClass.name}`]
+    value: i => DefaultClass.prototype._ukiMixinInheritance.every((className, index) => {
+      return className === i?._ukiMixinInheritance?.[index];
+    })
   });
   if (mixedInstanceOfDefault) {
-    // Make instanceof DefaultClass true for anything that technically is only
-    // an instanceof Mixin
+    // Make instanceof DefaultClass true for anything that technically only
+    // shares the same inheritance pattern (i.e. this is softer than strict
+    // javascript inheritance, and allows for something that's only descended
+    // from Mixin to still pass the instanceof DefaultClass check)
     Object.defineProperty(DefaultClass, Symbol.hasInstance, {
-      value: i => !!i?.[`_instanceOf${DefaultClass.name}`]
+      value: i => DefaultClass.prototype._ukiMixinInheritance.every((className, index) => {
+        return className === i?._ukiMixinInheritance?.[index];
+      })
     });
   }
   // Return both the default class and the mixin function
@@ -940,7 +947,7 @@ const { View, ViewMixin } = createMixinAndDefault({
 });
 
 var name = "uki";
-var version = "0.7.8";
+var version = "0.7.9";
 var description = "Minimal, d3-based Model-View library";
 var module = "dist/uki.esm.js";
 var scripts = {
