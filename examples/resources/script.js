@@ -66,7 +66,19 @@ class CustomView extends uki.View {
             console.log('raw promise resolved');
             resolve('Custom promise result');
           }, 1000);
-        })
+        }),
+        { // Placeholder resource to be updated later
+          type: 'placeholder',
+          value: null,
+          name: 'placeholderDemo'
+        },
+        { // Custom logic, such as conditionally fetching something
+          type: 'derivation',
+          derive: async () => {
+            console.log('deriving a value...');
+            return 'this is a derived value';
+          }
+        }
       ]
     });
 
@@ -76,23 +88,34 @@ class CustomView extends uki.View {
     });
   }
 
-  setup () {
+  async setup () {
     console.log('called setup()', this.resources);
     // Normally, you'd probably do something like
     // this.d3el.html(this.resources[0]), but this example also wants to demo
     // that the jQuery library that we loaded works:
     jQuery(this.d3el.node()).html(this.getNamedResource('template'));
 
-    this.d3el.select('button').on('click', async () => {
+    this.d3el.select('#late').on('click', async () => {
       await this.loadLateResource({ type: 'less', url: 'late.less', name: 'late' });
       console.log('late resource loaded:', this.getNamedResource('late'));
     });
+    this.d3el.select('#placeholder').on('click', async () => {
+      console.log('Placeholder was:', this.getNamedResource('placeholderDemo'));
+      await this.updateResource({
+        type: 'derivation',
+        name: 'placeholderDemo',
+        derive: () => {
+          return { 'Now an object': 'Updated successfully!' };
+        }
+      });
+      console.log('Placeholder is:', this.getNamedResource('placeholderDemo'));
+    });
   }
 
-  draw () {
+  async draw () {
     console.log('called draw()', this.resources);
     this.d3el.select('p')
-      .text('Hello, world!');
+      .text('This example demonstrates different types of resources that uki can load; see the console for many of the results');
     this.d3el.select('.data')
       .selectAll('pre').data(this.getNamedResource('CSV data'))
       .enter().append('pre')

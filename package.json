@@ -1,6 +1,6 @@
 {
   "name": "uki",
-  "version": "0.7.8",
+  "version": "0.7.9",
   "description": "Minimal, d3-based Model-View library",
   "module": "dist/uki.esm.js",
   "jsnext:main": "dist/uki.esm.js",
@@ -42,21 +42,21 @@
   },
   "devDependencies": {
     "@rollup/plugin-json": "^4.1.0",
-    "eslint": "^7.13.0",
+    "eslint": "^7.22.0",
     "eslint-config-semistandard": "^15.0.1",
-    "eslint-config-standard": "^16.0.1",
+    "eslint-config-standard": "^16.0.2",
     "eslint-plugin-import": "^2.22.1",
     "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-promise": "^4.2.1",
-    "eslint-plugin-standard": "^4.1.0",
-    "rollup": "^2.33.1",
+    "eslint-plugin-promise": "^4.3.1",
+    "eslint-plugin-standard": "^5.0.0",
+    "rollup": "^2.42.4",
     "rollup-plugin-execute": "^1.1.1",
     "serve": "^11.3.2"
   },
   "peerDependencies": {
-    "d3": "^6.2.0"
+    "d3": "^6.6.1"
   },
   "optionalDependencies": {
-    "less": "^3.12.2"
+    "less": "^4.1.1"
   }
 }

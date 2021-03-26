@@ -4,7 +4,7 @@
 
 ### As an ES6 module
 ```html
-<script src="https://d3js.org/d3.v5.min.js"></script>
+<script src="https://d3js.org/d3.v6.min.js"></script>
 <script type="module" src="myScript.js"></script>
 ```
 `myScript.js`:
@@ -14,8 +14,8 @@ import { Model, View } from 'uki.esm.js';
 
 ### As a global variable
 ```html
-<script src="https://d3js.org/d3.v5.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/uki@0.6.7/dist/uki.esm.js"></script>
+<script src="https://d3js.org/d3.v6.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/uki@0.7.9/dist/uki.esm.js"></script>
 <script type="module" src="myScript.js"></script>
 ```
 `myScript.js`:
@@ -38,8 +38,8 @@ something:
 
 ```html
 <head>
-  <script src="https://d3js.org/d3.v5.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/less.js/3.11.1/less.min.js" data-log-level="1"></script>
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/less.js/4.1.1/less.min.js" data-log-level="1"></script>
   <script type="module" src="myApp.js"></script>
 </head>
 ```
@@ -47,7 +47,8 @@ something:
 This can also be important if you need control over the specific version of a
 library that you want `uki` to use, as well as if you're making something that
 needs to work offline, like an Electron app—for the latter, you would point to
-a local copy of the library that you need.
+a local copy of the library that you need. `uki` will use whatever version of
+the library is in the global scope if it exists.
 
 ## In Javascript bundle tool hell
 One of the pipe dreams of `uki.js` is to enable a simpler coding workflow,
@@ -67,9 +68,10 @@ import { Model, View } from 'uki';
 ```
 
 ## In Node.js
-Of course, it doesn't make a ton of sense to use `uki.js` outside of the
-browser, but I realize it can still be important for testing purposes, etc. This
-*should* also work, but, like bundle tool hell, use at your own risk:
+It doesn't usually make much sense to use `uki.js` outside of the
+browser, but this can still be important for testing purposes, etc. This
+*should* also work, but, like bundle tool hell, it's not being actively tested,
+so please file an issue if this doesn't work:
 
 ```bash
 npm install --save d3 uki

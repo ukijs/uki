@@ -43,10 +43,8 @@ Where there is a parsed result (such as a CSV file), you can access it can be ac
 you can give a string `name` to resources that you can use for
 `getNamedResource()` access that doesn't depend on the order of that list.
 
-
-
-Each entry in the array should be an `Object` with `type` and `url` properties,
-for example:
+Each entry in the array should be an `Object` with `type`, optionally `name`,
+and resource type-specific properties like `url`. For example:
 
 ```javascript
 class MyModel extends Model {
@@ -54,7 +52,7 @@ class MyModel extends Model {
     super({
       resources: [
         { type: 'csv', url: 'myData.csv' },
-        { type: 'json', url: 'myConfiguration.json' }
+        { type: 'json', url: 'myConfiguration.json', name: 'config' }
       ]
     });
   }
@@ -66,14 +64,18 @@ class MyModel extends Model {
 
   console.log(myModel.resources[0]);
   // Logs the parsed contents of myData.csv
+  console.log(myModel.getNamedResource('config'));
+  // logs the parsed contents of myConfiguration.json
 })();
 ```
 
 ## Controlling resource load order
 By default, all resources loaded in the constructor will be done asychronously,
-with parallel requests. There are two options (`loadAfter` and `then`) and a
-function (`loadLateResource`) that you can use for more fine-grained control
-over the timing of loading resources.
+with parallel requests. There are two options (`loadAfter` and `then`) and
+functions (`loadLateResource` and `updateResource`) that you can use for more
+fine-grained control over the timing of loading resources, as well as the
+ability to override values (and even the entire resource type!) with
+`updateResource`.
 
 ### `loadAfter`
 This option lets you tell `uki` not to load one resource until a list of other
@@ -160,6 +162,27 @@ class myModel extends Model {
   }
   async loadStyles () {
     await this.loadLateResource({ type: 'less', url: 'conditionalStyle.less' });
+  }
+}
+```
+
+### `updateResource()`
+This overrides a resource.
+```javascript
+class myModel extends Model {
+  constructor () {
+    super({
+      resources: [
+        { type: 'placeholder', value: null, name: 'myApiData' }
+      ]
+    });
+  }
+  async refreshData () {
+    await this.updateResource({
+      type: 'json',
+      url: '/my/api/endpoint',
+      name: 'myApiData'
+    });
   }
 }
 ```
