@@ -1,8 +1,6 @@
 import createMixinAndDefault from './createMixinAndDefault.js';
 
 const { Introspectable, IntrospectableMixin } = createMixinAndDefault({
-  DefaultSuperClass: Object,
-  requireDefault: false,
   classDefFunc: SuperClass => {
     class Introspectable extends SuperClass {
       get type () {

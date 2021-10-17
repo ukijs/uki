@@ -48,8 +48,6 @@ const createMixinAndDefault = function ({
 };
 
 const { Introspectable, IntrospectableMixin } = createMixinAndDefault({
-  DefaultSuperClass: Object,
-  requireDefault: false,
   classDefFunc: SuperClass => {
     class Introspectable extends SuperClass {
       get type () {
@@ -86,11 +84,85 @@ const { Introspectable, IntrospectableMixin } = createMixinAndDefault({
   }
 });
 
+function smushOptionObj (defaultObj, optionObj, classObj, keySet) {
+  const resultObj = {};
+  if (!keySet) {
+    keySet = new Set([
+      ...Object.keys(defaultObj),
+      ...Object.keys(optionObj)
+    ]);
+  }
+  for (const key of keySet) {
+    let value = classObj && classObj[key] !== undefined
+      ? classObj[key]
+      : optionObj && optionObj[key] !== undefined
+        ? optionObj[key]
+        : defaultObj && defaultObj[key] !== undefined
+          ? defaultObj[key]
+          : undefined;
+    // Only smush pure Objects
+    if (value.constructor === Object) {
+      value = smushOptionObj((defaultObj || {})[key], (optionObj || {})[key], (classObj || {})[key], new Set(Object.keys(value)));
+    }
+    resultObj[key] = value;
+  }
+  return resultObj;
+}
+
+function smushDefaultOptions (obj) {
+  const result = {};
+  for (const constructor of getConstructorChain(obj)) {
+    Object.assign(result, constructor.defaultOptions || {});
+  }
+  return result;
+}
+
+function getConstructorChain (obj) {
+  var constructors = [], prototype = obj;
+  do {
+    prototype = Object.getPrototypeOf(prototype);
+    if (prototype && prototype.constructor) {
+      constructors.unshift(prototype.constructor);
+    }  } while (prototype != null);
+  return constructors;
+}
+
+const { SmushedOptionClass, SmushedOptionClassMixin } = createMixinAndDefault({
+  classDefFunc: SuperClass => class SmushedOptionClass extends SuperClass {
+    constructor (options = {}, ...args) {
+      super(options, ...args);
+      // Apply options, with the following order of precedence:
+      // - Options in a static defaultOptions (if defined) will be applied if
+      //   options are not otherwise specified
+      // - Options passed in to the first constructor argument override any
+      //   defaultOptions
+      // - Options defined on subclasses (either directly, or with getters /
+      //   setters) override all of the above
+      this._options = smushOptionObj(smushDefaultOptions(this), options, this);
+
+      // Create getters and setters for all options if they don't already
+      // exist
+      for (const prop of Object.keys(this._options)) {
+        const descriptor = Object.getOwnPropertyDescriptor(this, prop);
+        if (!descriptor || !descriptor.get || !descriptor.set) {
+          Object.defineProperty(this, prop, {
+            get: () => this._options[prop],
+            // eslint-disable-next-line no-return-assign
+            set: value => this._options[prop] = value
+          });
+        }
+      }
+    }
+  }
+});
+
 var utils = /*#__PURE__*/Object.freeze({
   __proto__: null,
   createMixinAndDefault: createMixinAndDefault,
   Introspectable: Introspectable,
-  IntrospectableMixin: IntrospectableMixin
+  IntrospectableMixin: IntrospectableMixin,
+  SmushedOptionClass: SmushedOptionClass,
+  SmushedOptionClassMixin: SmushedOptionClassMixin
 });
 
 // These are meant to imitate d3-fetch's code, because we want to mimic its API,
@@ -684,7 +756,9 @@ const { View, ViewMixin } = createMixinAndDefault({
     class View extends SuperClass {
       constructor (options = {}) {
         super(options);
-        this.dirty = true;
+        this.setupFinished = false;
+        this._renderResult = {};
+        this.drawFinished = false;
         this.debounceWait = options.debounceWait || 100;
         this._mutationObserver = null;
         this._drawTimeout = null;
@@ -742,7 +816,8 @@ const { View, ViewMixin } = createMixinAndDefault({
             // Assign ourselves the new new node
             newNode.__ukiView__ = this;
             this.d3el = d3el;
-            this.dirty = true;
+            this.setupFinished = false;
+            this.drawFinished = false;
             delete this._pauseRenderReasons['No d3el'];
 
             // Detect if the DOM node is ever removed
@@ -776,7 +851,7 @@ const { View, ViewMixin } = createMixinAndDefault({
       }
 
       pauseRender (reason) {
-        this._pauseRenderReasons[reason] = true;
+        this._pauseRenderReasons[reason] = null;
         this.trigger('pauseRender', reason);
       }
 
@@ -795,12 +870,16 @@ const { View, ViewMixin } = createMixinAndDefault({
       resetPauseReasons () {
         this._pauseRenderReasons = {};
         if (!this.d3el) {
-          this._pauseRenderReasons['No d3el'] = true;
+          this._pauseRenderReasons['No d3el'] = null;
         }
       }
 
+      get renderPausedReasons () {
+        return Object.keys(this._pauseRenderReasons);
+      }
+
       get renderPaused () {
-        return Object.keys(this._pauseRenderReasons).length > 0;
+        return this.renderPausedReasons.length > 0;
       }
 
       async render (d3el = this.d3el) {
@@ -811,33 +890,53 @@ const { View, ViewMixin } = createMixinAndDefault({
           // Don't execute any render calls until all resources are loaded,
           // we've actually been given a d3 element to work with, and we're not
           // paused for another reason
-          return new Promise((resolve, reject) => {
-            this._renderResolves.push(resolve);
-          });
+          const promiseList = [];
+          for (const [reason, priorPromise] of Object.entries(this._pauseRenderReasons)) {
+            if (priorPromise === null) {
+              this._pauseRenderReasons[reason] = new Promise((resolve, reject) => {
+                this._renderResolves.push(resolve);
+              });
+            }
+            promiseList.push(this._pauseRenderReasons[reason]);
+          }
+          return Promise.all(promiseList);
         }
 
-        if (this.dirty && this._setupPromise === undefined) {
+        if (!this.setupFinished && this._setupPromise === undefined) {
           // Need a fresh render; call setup immediately
           this.updateContainerCharacteristics(this.d3el);
           try {
             this._setupPromise = this.setup(this.d3el);
-            await this._setupPromise;
+            if (this._setupPromise instanceof Promise) {
+              this._renderResult.setup = await this._setupPromise;
+            } else {
+              this._renderResult.setup = this._setupPromise;
+              this._setupPromise = Promise.resolve();
+            }
           } catch (err) {
             if (this.setupError) {
               this._setupPromise = this.setupError(this.d3el, err);
-              await this._setupPromise;
+              if (this._setupPromise instanceof Promise) {
+                this._renderResult.setupError = await this._setupPromise;
+              } else {
+                this._renderResult.setupError = this._setupPromise;
+                this._setupPromise = Promise.resolve();
+              }
             } else {
               throw err;
             }
           }
-          this.dirty = false;
+          this.setupFinished = true;
           delete this._setupPromise;
-          this.trigger('setupFinished');
+          this.trigger('setupFinished', { ...this._renderResult });
         }
 
         // Debounce the actual draw call, and return a promise that will resolve
         // when draw() actually finishes
-        return new Promise((resolve, reject) => {
+        if (this._drawPromise) {
+          return this._drawPromise;
+        }
+        this._drawPromise = new Promise((resolve, reject) => {
           this._renderResolves.push(resolve);
           clearTimeout(this._drawTimeout);
           this._drawTimeout = setTimeout(async () => {
@@ -853,24 +952,29 @@ const { View, ViewMixin } = createMixinAndDefault({
               // everything in this._renderResolves
               return;
             }
-            let result;
+            const renderResultCopy = {
+              ...this._renderResult
+            };
             try {
-              result = await this.draw(this.d3el);
+              renderResultCopy.draw = await this.draw(this.d3el);
             } catch (err) {
               if (this.drawError) {
-                result = await this.drawError(this.d3el, err);
+                renderResultCopy.drawError = await this.drawError(this.d3el, err);
               } else {
                 throw err;
               }
             }
-            this.trigger('drawFinished');
+            this.drawFinished = true;
+            this.trigger('drawFinished', renderResultCopy);
             const temp = this._renderResolves;
             this._renderResolves = [];
+            delete this._drawPromise;
             for (const r of temp) {
-              r(result);
+              r(renderResultCopy);
             }
           }, this.debounceWait);
         });
+        return this._drawPromise;
       }
 
       async setup (d3el = this.d3el) {}
@@ -940,7 +1044,7 @@ const { View, ViewMixin } = createMixinAndDefault({
 });
 
 var name = "uki";
-var version$1 = "0.7.9";
+var version$1 = "0.8.0";
 var description = "Minimal, d3-based Model-View library";
 var module = "dist/uki.esm.js";
 var scripts = {
@@ -981,22 +1085,21 @@ var eslintConfig = {
 };
 var devDependencies = {
 	"@rollup/plugin-json": "^4.1.0",
-	eslint: "^7.22.0",
-	"eslint-config-semistandard": "^15.0.1",
-	"eslint-config-standard": "^16.0.2",
-	"eslint-plugin-import": "^2.22.1",
+	eslint: "^8.0.0",
+	"eslint-config-semistandard": "^16.0.0",
+	"eslint-config-standard": "^16.0.3",
+	"eslint-plugin-import": "^2.24.2",
 	"eslint-plugin-node": "^11.1.0",
-	"eslint-plugin-promise": "^4.3.1",
-	"eslint-plugin-standard": "^5.0.0",
-	rollup: "^2.42.4",
+	"eslint-plugin-promise": "^5.1.0",
+	rollup: "^2.58.0",
 	"rollup-plugin-execute": "^1.1.1",
-	serve: "^11.3.2"
+	serve: "^12.0.1"
 };
 var peerDependencies = {
-	d3: "^6.6.1"
+	d3: "^7.1.1"
 };
 var optionalDependencies = {
-	less: "^4.1.1"
+	less: "^4.1.2"
 };
 var pkg = {
 	name: name,

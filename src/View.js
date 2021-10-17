@@ -7,7 +7,9 @@ const { View, ViewMixin } = utils.createMixinAndDefault({
     class View extends SuperClass {
       constructor (options = {}) {
         super(options);
-        this.dirty = true;
+        this.setupFinished = false;
+        this._renderResult = {};
+        this.drawFinished = false;
         this.debounceWait = options.debounceWait || 100;
         this._mutationObserver = null;
         this._drawTimeout = null;
@@ -65,7 +67,8 @@ const { View, ViewMixin } = utils.createMixinAndDefault({
             // Assign ourselves the new new node
             newNode.__ukiView__ = this;
             this.d3el = d3el;
-            this.dirty = true;
+            this.setupFinished = false;
+            this.drawFinished = false;
             delete this._pauseRenderReasons['No d3el'];
 
             // Detect if the DOM node is ever removed
@@ -99,7 +102,7 @@ const { View, ViewMixin } = utils.createMixinAndDefault({
       }
 
       pauseRender (reason) {
-        this._pauseRenderReasons[reason] = true;
+        this._pauseRenderReasons[reason] = null;
         this.trigger('pauseRender', reason);
       }
 
@@ -118,12 +121,16 @@ const { View, ViewMixin } = utils.createMixinAndDefault({
       resetPauseReasons () {
         this._pauseRenderReasons = {};
         if (!this.d3el) {
-          this._pauseRenderReasons['No d3el'] = true;
+          this._pauseRenderReasons['No d3el'] = null;
         }
       }
 
+      get renderPausedReasons () {
+        return Object.keys(this._pauseRenderReasons);
+      }
+
       get renderPaused () {
-        return Object.keys(this._pauseRenderReasons).length > 0;
+        return this.renderPausedReasons.length > 0;
       }
 
       async render (d3el = this.d3el) {
@@ -134,33 +141,53 @@ const { View, ViewMixin } = utils.createMixinAndDefault({
           // Don't execute any render calls until all resources are loaded,
           // we've actually been given a d3 element to work with, and we're not
           // paused for another reason
-          return new Promise((resolve, reject) => {
-            this._renderResolves.push(resolve);
-          });
+          const promiseList = [];
+          for (const [reason, priorPromise] of Object.entries(this._pauseRenderReasons)) {
+            if (priorPromise === null) {
+              this._pauseRenderReasons[reason] = new Promise((resolve, reject) => {
+                this._renderResolves.push(resolve);
+              });
+            }
+            promiseList.push(this._pauseRenderReasons[reason]);
+          }
+          return Promise.all(promiseList);
         }
 
-        if (this.dirty && this._setupPromise === undefined) {
+        if (!this.setupFinished && this._setupPromise === undefined) {
           // Need a fresh render; call setup immediately
           this.updateContainerCharacteristics(this.d3el);
           try {
             this._setupPromise = this.setup(this.d3el);
-            await this._setupPromise;
+            if (this._setupPromise instanceof Promise) {
+              this._renderResult.setup = await this._setupPromise;
+            } else {
+              this._renderResult.setup = this._setupPromise;
+              this._setupPromise = Promise.resolve();
+            }
           } catch (err) {
             if (this.setupError) {
               this._setupPromise = this.setupError(this.d3el, err);
-              await this._setupPromise;
+              if (this._setupPromise instanceof Promise) {
+                this._renderResult.setupError = await this._setupPromise;
+              } else {
+                this._renderResult.setupError = this._setupPromise;
+                this._setupPromise = Promise.resolve();
+              }
             } else {
               throw err;
             }
           }
-          this.dirty = false;
+          this.setupFinished = true;
           delete this._setupPromise;
-          this.trigger('setupFinished');
+          this.trigger('setupFinished', { ...this._renderResult });
         }
 
         // Debounce the actual draw call, and return a promise that will resolve
         // when draw() actually finishes
-        return new Promise((resolve, reject) => {
+        if (this._drawPromise) {
+          return this._drawPromise;
+        }
+        this._drawPromise = new Promise((resolve, reject) => {
           this._renderResolves.push(resolve);
           clearTimeout(this._drawTimeout);
           this._drawTimeout = setTimeout(async () => {
@@ -176,24 +203,29 @@ const { View, ViewMixin } = utils.createMixinAndDefault({
               // everything in this._renderResolves
               return;
             }
-            let result;
+            const renderResultCopy = {
+              ...this._renderResult
+            };
             try {
-              result = await this.draw(this.d3el);
+              renderResultCopy.draw = await this.draw(this.d3el);
             } catch (err) {
               if (this.drawError) {
-                result = await this.drawError(this.d3el, err);
+                renderResultCopy.drawError = await this.drawError(this.d3el, err);
               } else {
                 throw err;
               }
             }
-            this.trigger('drawFinished');
+            this.drawFinished = true;
+            this.trigger('drawFinished', renderResultCopy);
             const temp = this._renderResolves;
             this._renderResolves = [];
+            delete this._drawPromise;
             for (const r of temp) {
-              r(result);
+              r(renderResultCopy);
             }
           }, this.debounceWait);
         });
+        return this._drawPromise;
       }
 
       async setup (d3el = this.d3el) {}
